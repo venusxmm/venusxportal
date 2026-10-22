@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
-import { AREA_LABEL, useMe, type WorkArea } from "@/lib/me";
+import { AREA_LABEL, AREA_ORDER, TASK_STATUS_LABEL, useMe, type WorkArea } from "@/lib/me";
 import { EmptyState, ErrorNote, Loading, PageHeader, Pill, isOverdue } from "@/components/portal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -153,7 +153,7 @@ function CreatorPage() {
 function Assignments({ creatorId, canEdit }: { creatorId: string; canEdit: boolean }) {
   const qc = useQueryClient();
   const [user, setUser] = useState("");
-  const [area, setArea] = useState<WorkArea>("marketing");
+  const [area, setArea] = useState<WorkArea>("creator_manager");
   const a = useQuery({
     queryKey: ["assignments", creatorId],
     queryFn: async () => {
@@ -200,7 +200,7 @@ function Assignments({ creatorId, canEdit }: { creatorId: string; canEdit: boole
           </Select>
           <Select value={area} onValueChange={(v) => setArea(v as WorkArea)}>
             <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>{(Object.keys(AREA_LABEL) as WorkArea[]).map((k) => <SelectItem key={k} value={k}>{AREA_LABEL[k]}</SelectItem>)}</SelectContent>
+            <SelectContent>{AREA_ORDER.map((k) => <SelectItem key={k} value={k}>{AREA_LABEL[k]}</SelectItem>)}</SelectContent>
           </Select>
           <Button size="sm" className="w-full" disabled={!user || add.isPending} onClick={() => add.mutate()}>Assign</Button>
         </div>
