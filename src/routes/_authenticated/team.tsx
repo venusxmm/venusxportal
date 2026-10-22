@@ -2,12 +2,12 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { AREA_LABEL, useMe, type AppRole, type WorkArea } from "@/lib/me";
+import { AREA_LABEL, AREA_ORDER, useMe, type AppRole, type WorkArea } from "@/lib/me";
 import { EmptyState, Loading, PageHeader } from "@/components/portal";
 import { Checkbox } from "@/components/ui/checkbox";
 
 const ROLES: AppRole[] = ["executive", "employee", "creator", "partner"];
-const AREAS = Object.keys(AREA_LABEL) as WorkArea[];
+const AREAS: readonly WorkArea[] = AREA_ORDER;
 
 export const Route = createFileRoute("/_authenticated/team")({
   head: () => ({ meta: [{ title: "Team & Access — VenusX Portal" }] }),
@@ -32,22 +32,31 @@ function Team() {
   });
   const toggleRole = useMutation({
     mutationFn: async ({ uid, role, on }: { uid: string; role: AppRole; on: boolean }) => {
-      const { error } = on
-        ? await supabase.from("user_roles").insert({ user_id: uid, role })
-        : await supabase.from("user_roles").delete().eq("user_id", uid).eq("role", role);
-      if (error) throw error;
+      if (on) {
+        const { error } = await supabase.from("user_roles").insert({ user_id: uid, role });
+        if (error && !error.message.includes("duplicate")) throw error;
+        return;
+      }
+      const { data, error } = await supabase.from("user_roles").delete().eq("user_id", uid).eq("role", role).select("id");
+      if (error) throw new Error(error.message.includes("last executive") ? "You can't remove the last executive." : error.message);
+      if (!data?.length) throw new Error("This change wasn't allowed. You can't remove your own executive role.");
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["team"] }); toast.success("Access updated"); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["team"] }); qc.invalidateQueries({ queryKey: ["me"] }); toast.success("Access updated"); },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["team"] }),
     onError: (e) => toast.error((e as Error).message),
   });
   const toggleArea = useMutation({
     mutationFn: async ({ uid, area, on }: { uid: string; area: WorkArea; on: boolean }) => {
-      const { error } = on
-        ? await supabase.from("user_areas").insert({ user_id: uid, area })
-        : await supabase.from("user_areas").delete().eq("user_id", uid).eq("area", area);
+      if (on) {
+        const { error } = await supabase.from("user_areas").insert({ user_id: uid, area });
+        if (error && !error.message.includes("duplicate")) throw error;
+        return;
+      }
+      const { data, error } = await supabase.from("user_areas").delete().eq("user_id", uid).eq("area", area).select("id");
       if (error) throw error;
+      if (!data?.length) throw new Error("Couldn't remove this area.");
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["team"] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["team"] }); qc.invalidateQueries({ queryKey: ["me"] }); },
     onError: (e) => toast.error((e as Error).message),
   });
 
@@ -80,14 +89,14 @@ function Team() {
                     </td>
                   ))}
                   <td className="p-3">
-                    <div className="flex flex-wrap gap-3">
+                    {isEmp ? <div className="flex flex-wrap gap-3">
                       {AREAS.map((a) => (
-                        <label key={a} className={"flex items-center gap-1 text-xs " + (isEmp ? "" : "opacity-40")}>
-                          <Checkbox disabled={!isEmp} checked={d.areas.some((x) => x.user_id === p.id && x.area === a)} onCheckedChange={(v) => toggleArea.mutate({ uid: p.id, area: a, on: !!v })} />
+                        <label key={a} className="flex items-center gap-1 text-xs">
+                          <Checkbox checked={d.areas.some((x) => x.user_id === p.id && x.area === a)} onCheckedChange={(v) => toggleArea.mutate({ uid: p.id, area: a, on: !!v })} />
                           {AREA_LABEL[a]}
                         </label>
                       ))}
-                    </div>
+                    </div> : <span className="text-xs text-muted-foreground">Select Employee to assign areas</span>}
                   </td>
                 </tr>
               );
