@@ -251,7 +251,7 @@ function TaskDialog({ task, onClose, creators, people, meId }: {
   );
 }
 
-export function Comments({ taskId }: { taskId: string }) {
+function Comments({ taskId }: { taskId: string }) {
   const qc = useQueryClient();
   const [body, setBody] = useState("");
   const list = useQuery({

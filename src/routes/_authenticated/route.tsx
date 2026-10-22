@@ -17,7 +17,7 @@ export const Route = createFileRoute("/_authenticated")({
   component: Shell,
 });
 
-type NavItem = { to: string; label: string; show: (m: Me) => boolean; soon?: boolean };
+type NavItem = { to: "/dashboard" | "/portal" | "/creators" | "/tasks" | "/finance" | "/team" | "/audit" | "";  label: string; show: (m: Me) => boolean; soon?: boolean };
 const NAV: NavItem[] = [
   { to: "/dashboard", label: "Overview", show: () => true },
   { to: "/portal", label: "My Portal", show: (m) => m.isCreator },
@@ -60,7 +60,7 @@ function Shell() {
         ) : (
           <Link
             key={n.label}
-            to={n.to}
+            to={n.to as "/dashboard"}
             onClick={() => setOpen(false)}
             className="rounded-md px-3 py-2 text-sm text-sidebar-foreground hover:bg-sidebar-accent"
             activeProps={{ className: "bg-sidebar-accent text-gold font-medium" }}
