@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { useMe } from "@/lib/me";
+import { TASK_STATUS_LABEL, useMe } from "@/lib/me";
 import { money, summarize } from "@/lib/finance";
 import { EmptyState, Loading, PageHeader, Pill, Stat, isOverdue } from "@/components/portal";
 import { Button } from "@/components/ui/button";
@@ -70,7 +70,7 @@ function Portal() {
                 {t.description && <p className="text-xs text-muted-foreground">{t.description}</p>}
                 <p className={"mt-1 text-xs " + (isOverdue(t.due_date, t.status) ? "text-destructive" : "text-muted-foreground")}>{t.due_date ? `Due ${t.due_date}` : ""}</p>
               </div>
-              <Pill value={t.status} />
+              <Pill value={t.status} label={TASK_STATUS_LABEL[t.status]} />
               <Button size="sm" variant={t.status === "done" ? "outline" : "default"} onClick={() => complete.mutate({ id: t.id, done: t.status !== "done" })}>
                 {t.status === "done" ? "Undo" : "Done"}
               </Button>

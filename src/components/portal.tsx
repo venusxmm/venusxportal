@@ -64,10 +64,10 @@ const tone: Record<string, string> = {
   expense: "border-destructive/40 text-destructive",
 };
 
-export function Pill({ value }: { value: string }) {
+export function Pill({ value, label }: { value: string; label?: string | undefined }) {
   return (
-    <Badge variant="outline" className={cn("font-normal capitalize", tone[value])}>
-      {value.replace(/_/g, " ")}
+    <Badge variant="outline" className={cn("text-[10px] font-medium uppercase tracking-wider", tone[value])}>
+      {label ?? value.replace(/_/g, " ")}
     </Badge>
   );
 }

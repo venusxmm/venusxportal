@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
-import { useMe } from "@/lib/me";
+import { TASK_STATUS_LABEL, useMe } from "@/lib/me";
 import { EmptyState, ErrorNote, Loading, PageHeader, Pill, isOverdue } from "@/components/portal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -94,7 +94,7 @@ function Tasks() {
             <SelectItem value="open">Open</SelectItem>
             <SelectItem value="overdue">Overdue</SelectItem>
             <SelectItem value="all">All</SelectItem>
-            {STATUSES.map((s) => <SelectItem key={s} value={s} className="capitalize">{s.replace("_", " ")}</SelectItem>)}
+            {STATUSES.map((s) => <SelectItem key={s} value={s} className="capitalize">{TASK_STATUS_LABEL[s]}</SelectItem>)}
             <SelectItem value="archived">Archived</SelectItem>
           </SelectContent>
         </Select>
@@ -129,7 +129,7 @@ function Tasks() {
                   <td className="p-3">
                     <Select value={t.status} onValueChange={(v) => setStatus.mutate({ id: t.id, status: v as TaskStatus })}>
                       <SelectTrigger className="h-8 w-32 capitalize"><SelectValue /></SelectTrigger>
-                      <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s} className="capitalize">{s.replace("_", " ")}</SelectItem>)}</SelectContent>
+                      <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s} className="capitalize">{TASK_STATUS_LABEL[s]}</SelectItem>)}</SelectContent>
                     </Select>
                   </td>
                   <td className={"p-3 " + (isOverdue(t.due_date, t.status) ? "text-destructive" : "text-muted-foreground")}>{t.due_date ?? "—"}</td>
@@ -142,7 +142,7 @@ function Tasks() {
         <div className="grid gap-4 overflow-x-auto md:grid-cols-5">
           {STATUSES.map((s) => (
             <div key={s} className="min-w-56 rounded-lg border bg-card/60 p-3">
-              <p className="mb-3 text-xs uppercase tracking-widest text-muted-foreground">{s.replace("_", " ")} · {rows.filter((t) => t.status === s).length}</p>
+              <p className="mb-3 text-xs uppercase tracking-widest text-muted-foreground">{TASK_STATUS_LABEL[s]} · {rows.filter((t) => t.status === s).length}</p>
               <div className="space-y-2">
                 {rows.filter((t) => t.status === s).map((t) => (
                   <button key={t.id} onClick={() => setEditing(t)} className="block w-full rounded-md border bg-card p-3 text-left text-sm hover:border-gold/50">
@@ -173,7 +173,7 @@ function ByDate({ rows, onOpen }: { rows: Task[]; onOpen: (t: Task) => void }) {
         <div key={d}>
           <p className="mb-2 text-sm font-medium text-gold">{d === "No date" ? d : new Date(d + "T00:00").toDateString()}</p>
           <div className="divide-y rounded-lg border bg-card">
-            {ts.map((t) => <button key={t.id} onClick={() => onOpen(t)} className="flex w-full items-center justify-between px-4 py-2 text-left text-sm hover:bg-accent"><span>{t.title}</span><Pill value={t.status} /></button>)}
+            {ts.map((t) => <button key={t.id} onClick={() => onOpen(t)} className="flex w-full items-center justify-between px-4 py-2 text-left text-sm hover:bg-accent"><span>{t.title}</span><Pill value={t.status} label={TASK_STATUS_LABEL[t.status]} /></button>)}
           </div>
         </div>
       ))}
@@ -229,7 +229,7 @@ function TaskDialog({ task, onClose, creators, people, meId }: {
                 <SelectContent>{PRIORITIES.map((p) => <SelectItem key={p} value={p} className="capitalize">{p}</SelectItem>)}</SelectContent></Select></div>
             <div className="space-y-1"><Label>Status</Label>
               <Select value={f.status} onValueChange={(v) => setF({ ...f, status: v as TaskStatus })}><SelectTrigger className="capitalize"><SelectValue /></SelectTrigger>
-                <SelectContent>{STATUSES.map((p) => <SelectItem key={p} value={p} className="capitalize">{p.replace("_", " ")}</SelectItem>)}</SelectContent></Select></div>
+                <SelectContent>{STATUSES.map((p) => <SelectItem key={p} value={p} className="capitalize">{TASK_STATUS_LABEL[p]}</SelectItem>)}</SelectContent></Select></div>
             <div className="space-y-1"><Label>Due date</Label><Input type="date" value={f.due_date} onChange={(e) => setF({ ...f, due_date: e.target.value })} /></div>
             <div className="space-y-1"><Label>Owner</Label>
               <Select value={f.owner_id} onValueChange={(v) => setF({ ...f, owner_id: v })}><SelectTrigger><SelectValue /></SelectTrigger>

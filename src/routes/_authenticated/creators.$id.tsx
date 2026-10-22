@@ -118,7 +118,7 @@ function CreatorPage() {
               <Label>Status</Label>
               <Select value={f.status} onValueChange={(v) => setF({ ...f, status: v as Status })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>)}</SelectContent>
+                <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s} className="uppercase tracking-wider">{s}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="space-y-1"><Label>Legal name</Label><Input value={f.legal_name} onChange={(e) => setF({ ...f, legal_name: e.target.value })} /></div>
@@ -140,7 +140,7 @@ function CreatorPage() {
               <span className="flex-1">{t.title}</span>
               {t.source !== "manual" && <span className="text-xs text-muted-foreground">auto</span>}
               {!t.visible_to_creator && <span className="text-xs text-muted-foreground">internal</span>}
-              <Pill value={t.status} />
+              <Pill value={t.status} label={TASK_STATUS_LABEL[t.status]} />
               <span className={isOverdue(t.due_date, t.status) ? "text-destructive" : "text-muted-foreground"}>{t.due_date ?? "—"}</span>
             </div>
           ))}
