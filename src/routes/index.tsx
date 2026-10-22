@@ -1,24 +1,35 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import logo from "@/assets/venusx-logo.jpeg.asset.json";
 
-// No head() here: the home route inherits title/description/og/twitter from
-// __root.tsx, and ships no og:image so serve-time hosting can inject the
-// project's social preview (explicit og:image or latest screenshot).
 export const Route = createFileRoute("/")({
+  head: () => ({
+    meta: [
+      { title: "VenusX Portal — Agency Operating System" },
+      { name: "description", content: "Sign in to the VenusX Portal for executives, team members and creators." },
+      { property: "og:title", content: "VenusX Portal" },
+      { property: "og:description", content: "The unified operating system for the VenusX agency." },
+    ],
+  }),
   component: Index,
 });
 
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
 function Index() {
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
-    </div>
+    <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-6 text-center">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,var(--gold-soft),transparent_60%)]" />
+      <img src={logo.url} alt="VenusX" className="relative h-40 w-40 rounded-full shadow-gold" />
+      <h1 className="relative mt-10 font-display text-5xl md:text-7xl">
+        Venus<span className="text-gold-gradient">X</span> Portal
+      </h1>
+      <p className="relative mt-4 max-w-md text-muted-foreground">
+        One place for the agency, the team and every creator.
+      </p>
+      <Link
+        to="/auth"
+        className="relative mt-10 rounded-md bg-gold-gradient px-8 py-3 text-sm font-semibold uppercase tracking-widest text-primary-foreground shadow-gold"
+      >
+        Enter portal
+      </Link>
+    </main>
   );
 }
