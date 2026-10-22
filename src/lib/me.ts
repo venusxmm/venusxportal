@@ -45,10 +45,22 @@ export const meQuery = queryOptions({
 
 export const useMe = () => useQuery(meQuery);
 
+/** Employee areas shown in Team & Access, in display order. "sharing" is retired and hidden. */
+export const AREA_ORDER = ["creator_manager", "creator_management", "marketing", "chatting", "operations", "admin"] as const;
 export const AREA_LABEL: Record<WorkArea, string> = {
-  marketing: "Marketing",
-  sharing: "Sharing",
-  operations: "Operations Admin",
+  creator_manager: "Creator Manager",
   creator_management: "Creator Management",
+  marketing: "Marketing",
   chatting: "Chatting",
+  operations: "Operations",
+  admin: "Admin",
+  sharing: "Sharing (retired)",
 };
+
+export const TASK_STATUS_LABEL = {
+  todo: "Not started",
+  in_progress: "In progress",
+  blocked: "Blocked",
+  review: "In review",
+  done: "Done",
+} as const;

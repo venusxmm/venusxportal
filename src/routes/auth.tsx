@@ -2,7 +2,6 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable/index";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,7 +21,7 @@ export const Route = createFileRoute("/auth")({
 
 function AuthPage() {
   const navigate = useNavigate();
-  const [mode, setMode] = useState<"in" | "up">("in");
+  const [mode, setMode] = useState<"in" | "up" | "forgot">("in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -43,7 +42,11 @@ function AuthPage() {
     e.preventDefault();
     setBusy(true);
     try {
-      if (mode === "in") {
+      if (mode === "forgot") {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + "/reset-password" });
+        if (error) throw error;
+        setSent(true);
+      } else if (mode === "in") {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       } else {
@@ -62,28 +65,20 @@ function AuthPage() {
     }
   }
 
-  async function google() {
-    const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin + "/auth" });
-    if (r.error) toast.error(r.error.message ?? "Google sign-in failed");
-  }
 
   return (
     <main className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center">
           <img src={logo.url} alt="VenusX" className="h-20 w-20 rounded-full" />
-          <h1 className="mt-4 text-2xl font-semibold">{mode === "in" ? "Welcome back" : "Create your account"}</h1>
+          <h1 className="mt-4 text-2xl font-semibold">{mode === "in" ? "Welcome back" : mode === "up" ? "Create your account" : "Reset your password"}</h1>
         </div>
         {sent ? (
           <div className="rounded-lg border bg-card p-6 text-center text-sm">
-            Check <b>{email}</b> and click the confirmation link to finish signing up.
+            Check <b>{email}</b> and click the link we sent{mode === "forgot" ? " to choose a new password." : " to finish signing up."}
           </div>
         ) : (
           <div className="space-y-4 rounded-lg border bg-card p-6">
-            <Button variant="outline" className="w-full" onClick={google} type="button">
-              Continue with Google
-            </Button>
-            <div className="text-center text-xs uppercase tracking-widest text-muted-foreground">or</div>
             <form onSubmit={submit} className="space-y-3">
               {mode === "up" && (
                 <div className="space-y-1">
@@ -95,12 +90,21 @@ function AuthPage() {
                 <Label htmlFor="email">Email</Label>
                 <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="pw">Password</Label>
-                <Input id="pw" type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} />
-              </div>
+              {mode !== "forgot" && (
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="pw">Password</Label>
+                    {mode === "in" && (
+                      <button type="button" className="text-xs text-muted-foreground hover:text-gold" onClick={() => setMode("forgot")}>
+                        Forgot password?
+                      </button>
+                    )}
+                  </div>
+                  <Input id="pw" type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} />
+                </div>
+              )}
               <Button className="w-full" disabled={busy}>
-                {busy ? "Please wait…" : mode === "in" ? "Sign in" : "Sign up"}
+                {busy ? "Please wait…" : mode === "in" ? "Sign in" : mode === "up" ? "Sign up" : "Send reset link"}
               </Button>
             </form>
             <button
@@ -108,7 +112,7 @@ function AuthPage() {
               className="w-full text-center text-sm text-muted-foreground hover:text-foreground"
               onClick={() => setMode(mode === "in" ? "up" : "in")}
             >
-              {mode === "in" ? "New here? Create an account" : "Already have an account? Sign in"}
+              {mode === "in" ? "New here? Create an account" : "Back to sign in"}
             </button>
           </div>
         )}

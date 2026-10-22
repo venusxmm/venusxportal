@@ -26,7 +26,7 @@ const NAV: NavItem[] = [
   { to: "/finance", label: "Finance", show: (m) => m.isExec },
   { to: "/team", label: "Team & Access", show: (m) => m.isExec },
   { to: "/audit", label: "Audit Log", show: (m) => m.isExec },
-  { to: "", label: "Marketing · VXRDOS", show: (m) => m.isStaff, soon: true },
+  { to: "", label: "Marketing", show: (m) => m.isStaff, soon: true },
   { to: "", label: "Chatting", show: (m) => m.isStaff, soon: true },
   { to: "", label: "Academy", show: () => true, soon: true },
   { to: "", label: "VenusX Credits", show: (m) => m.isStaff, soon: true },
@@ -82,9 +82,7 @@ function Shell() {
       >
         <div className="mb-8 flex items-center gap-3 px-2">
           <img src={logo.url} alt="" className="h-9 w-9 rounded-full" />
-          <span className="font-semibold tracking-wide">
-            Venus<span className="text-gold">X</span>
-          </span>
+          <span className="text-lg font-bold uppercase tracking-[0.3em] text-gold-gradient">VenusX</span>
           <button className="ml-auto md:hidden" onClick={() => setOpen(false)} aria-label="Close menu">
             <X className="h-5 w-5" />
           </button>
@@ -104,9 +102,7 @@ function Shell() {
           <button onClick={() => setOpen(true)} aria-label="Open menu">
             <Menu className="h-5 w-5" />
           </button>
-          <span className="font-semibold">
-            Venus<span className="text-gold">X</span>
-          </span>
+          <span className="text-lg font-bold uppercase tracking-[0.3em] text-gold-gradient">VenusX</span>
         </header>
         <main className="mx-auto w-full max-w-7xl flex-1 p-4 md:p-8">
           <Outlet />

@@ -51,7 +51,7 @@ function Creators() {
           <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All statuses</SelectItem>
-            {STATUSES.map((s) => <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>)}
+            {STATUSES.map((s) => <SelectItem key={s} value={s} className="uppercase tracking-wider">{s}</SelectItem>)}
           </SelectContent>
         </Select>
         <Button variant="ghost" onClick={() => setShowArchived(!showArchived)}>
@@ -119,8 +119,8 @@ function NewCreator() {
           <div className="space-y-1">
             <Label>Status</Label>
             <Select value={f.status} onValueChange={(v) => setF({ ...f, status: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>)}</SelectContent>
+              <SelectTrigger className="uppercase tracking-wider"><SelectValue /></SelectTrigger>
+              <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s} className="uppercase tracking-wider">{s}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           <Button className="w-full" disabled={m.isPending}>Create</Button>
