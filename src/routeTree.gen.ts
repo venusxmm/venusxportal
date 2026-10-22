@@ -12,8 +12,10 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
-import { Route as AuthenticatedCreatorsRouteImport } from './routes/_authenticated/creators'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedTasksRouteImport } from './routes/_authenticated/tasks'
+import { Route as AuthenticatedCreatorsIndexRouteImport } from './routes/_authenticated/creators.index'
+import { Route as AuthenticatedCreatorsIdRouteImport } from './routes/_authenticated/creators.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -29,49 +31,69 @@ const AuthRoute = AuthRouteImport.update({
   path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedCreatorsRoute = AuthenticatedCreatorsRouteImport.update({
-  id: '/creators',
-  path: '/creators',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedTasksRoute = AuthenticatedTasksRouteImport.update({
+  id: '/tasks',
+  path: '/tasks',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedCreatorsIndexRoute =
+  AuthenticatedCreatorsIndexRouteImport.update({
+    id: '/creators/',
+    path: '/creators/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedCreatorsIdRoute = AuthenticatedCreatorsIdRouteImport.update({
+  id: '/creators/$id',
+  path: '/creators/$id',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
-  '/creators': typeof AuthenticatedCreatorsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/tasks': typeof AuthenticatedTasksRoute
+  '/creators/$id': typeof AuthenticatedCreatorsIdRoute
+  '/creators/': typeof AuthenticatedCreatorsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
-  '/creators': typeof AuthenticatedCreatorsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/tasks': typeof AuthenticatedTasksRoute
+  '/creators/$id': typeof AuthenticatedCreatorsIdRoute
+  '/creators': typeof AuthenticatedCreatorsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
-  '/_authenticated/creators': typeof AuthenticatedCreatorsRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/_authenticated/tasks': typeof AuthenticatedTasksRoute
+  '/_authenticated/creators/$id': typeof AuthenticatedCreatorsIdRoute
+  '/_authenticated/creators/': typeof AuthenticatedCreatorsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/creators' | '/dashboard'
+  fullPaths:
+    '/' | '/auth' | '/dashboard' | '/tasks' | '/creators/$id' | '/creators/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/creators' | '/dashboard'
+  to: '/' | '/auth' | '/dashboard' | '/tasks' | '/creators/$id' | '/creators'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
     | '/auth'
-    | '/_authenticated/creators'
     | '/_authenticated/dashboard'
+    | '/_authenticated/tasks'
+    | '/_authenticated/creators/$id'
+    | '/_authenticated/creators/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -103,13 +125,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/creators': {
-      id: '/_authenticated/creators'
-      path: '/creators'
-      fullPath: '/creators'
-      preLoaderRoute: typeof AuthenticatedCreatorsRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
     '/_authenticated/dashboard': {
       id: '/_authenticated/dashboard'
       path: '/dashboard'
@@ -117,17 +132,42 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/tasks': {
+      id: '/_authenticated/tasks'
+      path: '/tasks'
+      fullPath: '/tasks'
+      preLoaderRoute: typeof AuthenticatedTasksRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/creators/': {
+      id: '/_authenticated/creators/'
+      path: '/creators'
+      fullPath: '/creators/'
+      preLoaderRoute: typeof AuthenticatedCreatorsIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/creators/$id': {
+      id: '/_authenticated/creators/$id'
+      path: '/creators/$id'
+      fullPath: '/creators/$id'
+      preLoaderRoute: typeof AuthenticatedCreatorsIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
 interface AuthenticatedRouteRouteChildren {
-  AuthenticatedCreatorsRoute: typeof AuthenticatedCreatorsRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedTasksRoute: typeof AuthenticatedTasksRoute
+  AuthenticatedCreatorsIdRoute: typeof AuthenticatedCreatorsIdRoute
+  AuthenticatedCreatorsIndexRoute: typeof AuthenticatedCreatorsIndexRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
-  AuthenticatedCreatorsRoute: AuthenticatedCreatorsRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedTasksRoute: AuthenticatedTasksRoute,
+  AuthenticatedCreatorsIdRoute: AuthenticatedCreatorsIdRoute,
+  AuthenticatedCreatorsIndexRoute: AuthenticatedCreatorsIndexRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
