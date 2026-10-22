@@ -11,9 +11,9 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-export const STATUSES = ["lead", "onboarding", "active", "paused", "offboarded"] as const;
+const STATUSES = ["lead", "onboarding", "active", "paused", "offboarded"] as const;
 
-export const Route = createFileRoute("/_authenticated/creators")({
+export const Route = createFileRoute("/_authenticated/creators/")({
   head: () => ({ meta: [{ title: "Creators — VenusX Portal" }] }),
   component: Creators,
 });
