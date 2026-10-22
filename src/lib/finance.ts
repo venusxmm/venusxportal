@@ -62,7 +62,7 @@ export function summarize(rows: LedgerRow[]): CurrencySummary[] {
     });
 }
 
-export function inRange(rows: LedgerRow[], from?: string, to?: string) {
+export function inRange<T extends LedgerRow>(rows: T[], from?: string, to?: string): T[] {
   return rows.filter((r) => (!from || r.occurred_on >= from) && (!to || r.occurred_on <= to));
 }
 

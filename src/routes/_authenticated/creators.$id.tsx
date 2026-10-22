@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 import { AREA_LABEL, useMe, type WorkArea } from "@/lib/me";
 import { EmptyState, ErrorNote, Loading, PageHeader, Pill, isOverdue } from "@/components/portal";
 import { Button } from "@/components/ui/button";
@@ -56,7 +57,7 @@ function CreatorPage() {
   }, [c.data]);
 
   const save = useMutation({
-    mutationFn: async (patch: Record<string, unknown>) => {
+    mutationFn: async (patch: Database["public"]["Tables"]["creators"]["Update"]) => {
       const { error } = await supabase.from("creators").update(patch).eq("id", id);
       if (error) throw error;
     },

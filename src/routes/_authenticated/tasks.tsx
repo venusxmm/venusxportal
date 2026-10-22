@@ -182,7 +182,7 @@ function ByDate({ rows, onOpen }: { rows: Task[]; onOpen: (t: Task) => void }) {
 }
 
 function TaskDialog({ task, onClose, creators, people, meId }: {
-  task: Task | null; onClose: () => void; meId?: string;
+  task: Task | null; onClose: () => void; meId?: string | undefined;
   creators: { id: string; stage_name: string }[]; people: { id: string; full_name: string | null; email: string | null }[];
 }) {
   const qc = useQueryClient();
@@ -202,7 +202,7 @@ function TaskDialog({ task, onClose, creators, people, meId }: {
     mutationFn: async () => {
       const { error } = task
         ? await supabase.from("tasks").update(payload()).eq("id", task.id)
-        : await supabase.from("tasks").insert({ ...payload(), created_by: meId });
+        : await supabase.from("tasks").insert({ ...payload(), created_by: meId ?? null });
       if (error) throw error;
     },
     onSuccess: () => done(task ? "Task updated" : "Task created"), onError: err,

@@ -90,7 +90,7 @@ function NewCreator() {
         legal_name: f.legal_name.trim() || null,
         email: f.email.trim().toLowerCase() || null,
         status: f.status as (typeof STATUSES)[number],
-        created_by: me?.id,
+        created_by: me?.id ?? null,
       });
       if (error) throw error;
     },

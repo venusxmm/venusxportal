@@ -11,10 +11,10 @@ describe("finance ledger math", () => {
   });
 
   it("splits revenue by agency share and computes net profit", () => {
-    const [s] = summarize([
+    const s = summarize([
       { kind: "revenue", amount: 1000, currency: "USD", occurred_on: "2026-01-01", agency_share_pct: 40 },
       { kind: "expense", amount: 150, currency: "USD", occurred_on: "2026-01-02" },
-    ]);
+    ])[0]!;
     expect(s.agencyRevenue).toBe(400);
     expect(s.creatorRevenue).toBe(600);
     expect(s.netProfit).toBe(250);
@@ -22,11 +22,11 @@ describe("finance ledger math", () => {
   });
 
   it("excludes archived rows and avoids float drift", () => {
-    const [s] = summarize([
+    const s = summarize([
       { kind: "revenue", amount: "0.10", currency: "USD", occurred_on: "2026-01-01" },
       { kind: "revenue", amount: "0.20", currency: "USD", occurred_on: "2026-01-01" },
       { kind: "revenue", amount: 999, currency: "USD", occurred_on: "2026-01-01", archived_at: "x" },
-    ]);
+    ])[0]!;
     expect(s.revenue).toBe(0.3);
   });
 
