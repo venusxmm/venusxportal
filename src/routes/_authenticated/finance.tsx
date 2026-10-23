@@ -1,12 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { ArchiveRestore, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { useMe } from "@/lib/me";
+import { postCreatorPayout } from "@/lib/payout.functions";
 import {
   DEFAULT_AGENCY_SHARE_PCT,
   inRange,
@@ -364,6 +365,7 @@ function NewTxn({
   });
   const [f, setF] = useState(makeInitialForm);
   const [agencyShareEdited, setAgencyShareEdited] = useState(transaction?.agency_share_pct != null);
+  const payoutRequest = useRef<{ key: string; id: string } | null>(null);
   const revenueSplit = splitRevenue(f.amount, f.agency_share_pct);
   const m = useMutation({
     mutationFn: async () => {
@@ -395,6 +397,28 @@ function NewTxn({
         external_ref: f.external_ref.trim() || null,
         shared_with_creator: f.shared_with_creator,
       };
+      if (!transaction && transactionKind === "payout") {
+        if (!creatorId) throw new Error("Select the creator receiving this payout.");
+        const payout = {
+          creator_id: creatorId,
+          amount: amt,
+          currency: f.currency,
+          occurred_on: f.occurred_on,
+          category: f.category.trim(),
+          description: payload.description,
+          external_ref: payload.external_ref,
+          shared_with_creator: f.shared_with_creator,
+        };
+        const key = JSON.stringify(payout);
+        if (payoutRequest.current?.key !== key) {
+          payoutRequest.current = { key, id: crypto.randomUUID() };
+        }
+        await postCreatorPayout({
+          data: { id: payoutRequest.current.id, ...payout },
+        });
+        return;
+      }
+
       const { data, error } = transaction
         ? await supabase.from("transactions").update(payload).eq("id", transaction.id).select("id")
         : await supabase.from("transactions").insert(payload).select("id");
@@ -408,6 +432,7 @@ function NewTxn({
     onSuccess: () => {
       toast.success(transaction ? "Entry updated" : "Entry recorded");
       qc.invalidateQueries({ queryKey: ["transactions"] });
+      payoutRequest.current = null;
       setOpen(false);
       onClose?.();
       if (!transaction) {

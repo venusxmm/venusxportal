@@ -17,6 +17,10 @@ const archiveOnlyMigration = readFileSync(
   resolve(process.cwd(), "drizzle/migrations/0014_transactions_archive_only.sql"),
   "utf8",
 );
+const postCreatorPayoutMigration = readFileSync(
+  resolve(process.cwd(), "drizzle/migrations/0015_post_creator_payout.sql"),
+  "utf8",
+);
 const ids = {
   executive: "00000000-0000-0000-0000-000000000001",
   employee: "00000000-0000-0000-0000-000000000002",
@@ -60,7 +64,11 @@ describe("finance row-level security integration", () => {
         access_revoked_at timestamptz
       );
       create table public.user_roles (user_id uuid not null, role public.app_role not null);
-      create table public.creators (id uuid primary key, user_id uuid);
+      create table public.creators (
+        id uuid primary key,
+        user_id uuid,
+        archived_at timestamptz
+      );
       create table public.audit_events (
         id uuid primary key default gen_random_uuid(),
         actor_id uuid,
@@ -76,10 +84,13 @@ describe("finance row-level security integration", () => {
         currency char(3) not null default 'USD',
         occurred_on date not null default current_date,
         category text not null default 'general',
+        description text,
         creator_id uuid references public.creators(id),
         agency_share_pct numeric check (agency_share_pct between 0 and 100),
+        external_ref text unique,
         shared_with_creator boolean not null default false,
-        archived_at timestamptz
+        archived_at timestamptz,
+        created_by uuid
       );
       grant usage on schema public, auth to authenticated;
       grant execute on all functions in schema auth to authenticated;
@@ -151,6 +162,8 @@ describe("finance row-level security integration", () => {
     await db.exec(payoutBalanceMigration);
     await db.exec(archiveOnlyMigration);
     await db.exec(archiveOnlyMigration);
+    await db.exec(postCreatorPayoutMigration);
+    await db.exec(postCreatorPayoutMigration);
   });
 
   afterEach(async () => {
@@ -291,5 +304,133 @@ describe("finance row-level security integration", () => {
         db.query("update public.transactions set archived_at = null where id = $1", [payoutId]),
       ),
     ).resolves.toBeDefined();
+  });
+
+  it("posts payouts only for executives, binds them to a creator, and safely retries", async () => {
+    const payoutId = "00000000-0000-0000-0000-000000000301";
+    const payoutArgs = [
+      payoutId,
+      ids.creatorAccount,
+      20,
+      "USD",
+      "2026-10-23",
+      "Creator payout",
+      "Synthetic integration payout",
+      "qa-payout-001",
+      true,
+    ] as const;
+    const query = () =>
+      db.query<{ post_creator_payout: string }>(
+        `select public.post_creator_payout(
+          $1, $2, $3, $4, $5, $6, $7, $8, $9
+        ) as post_creator_payout`,
+        [...payoutArgs],
+      );
+
+    const { rows: privileges } = await db.query<{
+      authenticated_can_execute: boolean;
+      anon_can_execute: boolean;
+    }>(`select
+      has_function_privilege(
+        'authenticated',
+        'public.post_creator_payout(uuid,uuid,numeric,text,date,text,text,text,boolean)',
+        'EXECUTE'
+      ) as authenticated_can_execute,
+      has_function_privilege(
+        'anon',
+        'public.post_creator_payout(uuid,uuid,numeric,text,date,text,text,text,boolean)',
+        'EXECUTE'
+      ) as anon_can_execute`);
+    expect(privileges[0]).toEqual({ authenticated_can_execute: true, anon_can_execute: false });
+
+    await expect(asUser(ids.employee, query)).rejects.toThrow(/only executives/i);
+
+    const first = await asUser(ids.executive, query);
+    const retry = await asUser(ids.executive, query);
+    expect(first.rows[0]?.post_creator_payout).toBe(payoutId);
+    expect(retry.rows[0]?.post_creator_payout).toBe(payoutId);
+
+    const { rows } = await db.query<{
+      id: string;
+      creator_id: string;
+      created_by: string;
+    }>(
+      `select id, creator_id, created_by
+       from public.transactions where id = $1`,
+      [payoutId],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      id: payoutId,
+      creator_id: ids.creatorAccount,
+      created_by: ids.executive,
+    });
+
+    await expect(
+      asUser(ids.executive, () =>
+        db.query(
+          `select public.post_creator_payout(
+          $1, $2, 20.01, $3, $4, $5, $6, $7, $8
+        )`,
+          [
+            "00000000-0000-0000-0000-000000000302",
+            ids.creatorAccount,
+            "USD",
+            "2026-10-23",
+            "Overspend",
+            null,
+            null,
+            false,
+          ],
+        ),
+      ),
+    ).rejects.toThrow(/exceeds.*earned balance/i);
+
+    await expect(
+      asUser(ids.executive, () =>
+        db.query(
+          `select public.post_creator_payout(
+          $1, $2, $3, $4, $5, $6, $7, $8, $9
+        )`,
+          [
+            payoutId,
+            ids.creatorAccount,
+            19,
+            "USD",
+            "2026-10-23",
+            "Creator payout",
+            "Synthetic integration payout",
+            "qa-payout-001",
+            true,
+          ],
+        ),
+      ),
+    ).rejects.toThrow(/retry does not match/i);
+  });
+
+  it("rejects payouts without an active source creator", async () => {
+    await db.query("update public.creators set archived_at = now() where id = $1", [
+      ids.creatorAccount,
+    ]);
+    await expect(
+      asUser(ids.executive, () =>
+        db.query(
+          `select public.post_creator_payout(
+            $1, $2, $3, $4, $5, $6, $7, $8, $9
+          )`,
+          [
+            "00000000-0000-0000-0000-000000000303",
+            ids.creatorAccount,
+            1,
+            "USD",
+            "2026-10-23",
+            "Archived creator payout",
+            null,
+            null,
+            false,
+          ],
+        ),
+      ),
+    ).rejects.toThrow(/source creator is unavailable/i);
   });
 });
