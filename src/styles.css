@@ -93,14 +93,20 @@
 }
 
 @layer base {
-  * { border-color: var(--color-border); }
+  * {
+    border-color: var(--color-border);
+  }
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
   }
-  h1, h2, h3 { letter-spacing: -0.02em; }
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.02em;
+  }
 }
 
 @utility text-gold-gradient {
@@ -109,6 +115,12 @@
   background-clip: text;
   color: transparent;
 }
-@utility bg-gold-gradient { background: var(--gradient-gold); }
-@utility shadow-gold { box-shadow: var(--shadow-gold); }
-@utility font-display { font-family: var(--font-display); }
+@utility bg-gold-gradient {
+  background: var(--gradient-gold);
+}
+@utility shadow-gold {
+  box-shadow: var(--shadow-gold);
+}
+@utility font-display {
+  font-family: var(--font-display);
+}

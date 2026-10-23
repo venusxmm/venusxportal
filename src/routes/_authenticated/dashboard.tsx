@@ -91,7 +91,10 @@ function StaffOverview() {
   const creators = useQuery({
     queryKey: ["creators", "count"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("creators").select("status").is("archived_at", null);
+      const { data, error } = await supabase
+        .from("creators")
+        .select("status")
+        .is("archived_at", null);
       if (error) throw error;
       return data;
     },
@@ -119,19 +122,33 @@ function StaffOverview() {
 
   return (
     <div>
-      <PageHeader title={`Good to see you${me?.name ? ", " + me.name.split(" ")[0] : ""}`} subtitle="Live view from your agency records." />
+      <PageHeader
+        title={`Good to see you${me?.name ? ", " + me.name.split(" ")[0] : ""}`}
+        subtitle="Live view from your agency records."
+      />
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Stat label="Active creators" value={creators.data?.filter((c) => c.status === "active").length ?? "—"} />
-        <Stat label="Onboarding" value={creators.data?.filter((c) => c.status === "onboarding").length ?? "—"} />
+        <Stat
+          label="Active creators"
+          value={creators.data?.filter((c) => c.status === "active").length ?? "—"}
+        />
+        <Stat
+          label="Onboarding"
+          value={creators.data?.filter((c) => c.status === "onboarding").length ?? "—"}
+        />
         <Stat label="Overdue tasks" value={overdue.length} />
         <Stat label="Critical open" value={critical.length} />
       </div>
 
       {me?.isExec && (
         <section className="mt-8">
-          <h2 className="mb-3 text-sm uppercase tracking-widest text-muted-foreground">This month</h2>
+          <h2 className="mb-3 text-sm uppercase tracking-widest text-muted-foreground">
+            This month
+          </h2>
           {fin.length === 0 ? (
-            <EmptyState title="No financial records this month" body="Add revenue and expenses in Finance to see results here." />
+            <EmptyState
+              title="No financial records this month"
+              body="Add revenue and expenses in Finance to see results here."
+            />
           ) : (
             fin.map((s) => (
               <div key={s.currency} className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -160,11 +177,25 @@ function StaffOverview() {
         ) : (
           <div className="divide-y rounded-lg border bg-card">
             {list.slice(0, 10).map((t) => (
-              <Link key={t.id} to="/tasks" className="flex items-center gap-3 px-4 py-3 text-sm hover:bg-accent">
+              <Link
+                key={t.id}
+                to="/tasks"
+                className="flex items-center gap-3 px-4 py-3 text-sm hover:bg-accent"
+              >
                 <span className="flex-1 truncate">{t.title}</span>
-                {t.creators?.stage_name && <span className="hidden text-muted-foreground sm:inline">{t.creators.stage_name}</span>}
+                {t.creators?.stage_name && (
+                  <span className="hidden text-muted-foreground sm:inline">
+                    {t.creators.stage_name}
+                  </span>
+                )}
                 <Pill value={t.priority} />
-                <span className={isOverdue(t.due_date, t.status) ? "text-destructive" : "text-muted-foreground"}>{t.due_date ?? "—"}</span>
+                <span
+                  className={
+                    isOverdue(t.due_date, t.status) ? "text-destructive" : "text-muted-foreground"
+                  }
+                >
+                  {t.due_date ?? "—"}
+                </span>
               </Link>
             ))}
           </div>

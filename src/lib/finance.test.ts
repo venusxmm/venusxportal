@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_AGENCY_SHARE_PCT, summarize, monthly } from "./finance";
+import { DEFAULT_AGENCY_SHARE_PCT, summarize, monthly, splitRevenue } from "./finance";
 
 describe("finance ledger math", () => {
   it("never combines different currencies", () => {
@@ -42,6 +42,16 @@ describe("finance ledger math", () => {
     ])[0]!;
     expect(summary.agencyRevenue).toBe(60);
     expect(summary.creatorRevenue).toBe(40);
+  });
+
+  it("uses the ledger's cent rounding for the form's revenue split preview", () => {
+    expect(splitRevenue("100", DEFAULT_AGENCY_SHARE_PCT)).toEqual({
+      agency: 60,
+      creator: 40,
+    });
+    expect(splitRevenue("0.01", 50)).toEqual({ agency: 0.01, creator: 0 });
+    expect(splitRevenue("1.20", "")).toBeNull();
+    expect(splitRevenue("invalid", 60)).toBeNull();
   });
 
   it("excludes archived rows and avoids float drift", () => {

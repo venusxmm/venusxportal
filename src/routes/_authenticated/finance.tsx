@@ -7,7 +7,14 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { useMe } from "@/lib/me";
-import { DEFAULT_AGENCY_SHARE_PCT, inRange, monthly, money, summarize } from "@/lib/finance";
+import {
+  DEFAULT_AGENCY_SHARE_PCT,
+  inRange,
+  monthly,
+  money,
+  splitRevenue,
+  summarize,
+} from "@/lib/finance";
 import { EmptyState, ErrorNote, Loading, PageHeader, Pill, Stat } from "@/components/portal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -350,6 +357,7 @@ function NewTxn({
   });
   const [f, setF] = useState(makeInitialForm);
   const [agencyShareEdited, setAgencyShareEdited] = useState(transaction?.agency_share_pct != null);
+  const revenueSplit = splitRevenue(f.amount, f.agency_share_pct);
   const m = useMutation({
     mutationFn: async () => {
       const amt = Number(f.amount);
@@ -526,18 +534,14 @@ function NewTxn({
                 }}
               />
               <p className="text-xs text-muted-foreground">
-                {f.amount && f.currency !== "none" && f.agency_share_pct ? (
+                {f.currency !== "none" && revenueSplit ? (
                   <>
-                    Agency:{" "}
-                    {money((Number(f.amount) * Number(f.agency_share_pct)) / 100, f.currency)}
+                    Agency: {money(revenueSplit.agency, f.currency)}
                     {" · Creator: "}
-                    {money(
-                      Number(f.amount) - (Number(f.amount) * Number(f.agency_share_pct)) / 100,
-                      f.currency,
-                    )}
+                    {money(revenueSplit.creator, f.currency)}
                   </>
                 ) : (
-                  "Enter an amount to preview the revenue split."
+                  "Enter a valid amount and agency share to preview the revenue split."
                 )}
               </p>
             </div>

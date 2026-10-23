@@ -32,6 +32,28 @@ const parseAgencyShare = (value: number | string | null | undefined) => {
   return Number.isFinite(pct) && pct >= 0 && pct <= 100 ? pct : 100;
 };
 
+export function splitRevenue(
+  amount: number | string,
+  agencySharePct: number | string | null | undefined,
+) {
+  const value = Number(amount);
+  const pct = Number(agencySharePct);
+  if (
+    agencySharePct == null ||
+    agencySharePct === "" ||
+    !Number.isFinite(value) ||
+    !Number.isFinite(pct) ||
+    pct < 0 ||
+    pct > 100
+  ) {
+    return null;
+  }
+
+  const totalCents = cents(value);
+  const agencyCents = Math.round((totalCents * pct) / 100);
+  return { agency: agencyCents / 100, creator: (totalCents - agencyCents) / 100 };
+}
+
 /**
  * Single source of truth for ledger math. Never mixes currencies:
  * returns one summary per currency. Archived rows are excluded.
@@ -48,8 +70,8 @@ export function summarize(rows: LedgerRow[]): CurrencySummary[] {
     const c = cents(amount);
     if (r.kind === "revenue") {
       acc.rev += c;
-      const pct = parseAgencyShare(r.agency_share_pct);
-      acc.agency += Math.round((c * pct) / 100);
+      const split = splitRevenue(c / 100, parseAgencyShare(r.agency_share_pct));
+      if (split) acc.agency += cents(split.agency);
     } else if (r.kind === "expense") acc.exp += c;
     else acc.pay += c;
     map.set(cur, acc);

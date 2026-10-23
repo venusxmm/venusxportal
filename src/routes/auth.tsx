@@ -5,7 +5,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import logo from "@/assets/venusx-logo.jpeg.asset.json";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -140,7 +139,7 @@ function AuthPage() {
     <main className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center">
-          <img src={logo.url} alt="VenusX" className="h-20 w-20 rounded-full" />
+          <img src="/venusx-logo.jpeg" alt="VenusX" className="h-20 w-20 rounded-full" />
           <h1 className="mt-4 text-2xl font-semibold">
             {mode === "in"
               ? "Welcome back"

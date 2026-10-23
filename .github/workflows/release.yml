@@ -3,7 +3,7 @@ name: Official release
 on:
   push:
     tags:
-      - "v0.*"
+      - "v*.*.*"
 
 permissions:
   contents: read
@@ -22,8 +22,15 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           version="${TAG#v}"
-          [[ "$version" =~ ^0\.[0-9]+\.[0-9]+$ ]]
-          [[ "$version" != "1.0.0" ]]
+          [[ "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+      - name: Lint
+        run: bun run lint
+      - name: Type check
+        run: bunx tsc --noEmit
+      - name: Test
+        run: bun run test
+      - name: Check migrations
+        run: bunx drizzle-kit check
       - name: Build official release
         env:
           VITE_APP_VERSION: ${{ github.ref_name }}

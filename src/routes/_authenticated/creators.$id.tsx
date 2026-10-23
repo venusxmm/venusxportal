@@ -51,6 +51,7 @@ function CreatorPage() {
   const { data: me } = useMe();
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const canSeePrivateDetails = !!me?.isStaff;
   const canEdit = !!(me?.isExec || me?.areas.includes("creator_management"));
 
   const c = useQuery({
@@ -58,8 +59,23 @@ function CreatorPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("creators")
-        .select("*")
+        .select(
+          "id,stage_name,legal_name,email,user_id,status,positioning,objectives,social_links,archived_at,created_by,created_at,updated_at",
+        )
         .eq("id", id)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+  const privateDetails = useQuery({
+    queryKey: ["creator-private-details", id],
+    enabled: canSeePrivateDetails,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("creator_private_details")
+        .select("internal_notes,internal_photo_path")
+        .eq("creator_id", id)
         .maybeSingle();
       if (error) throw error;
       return data;
@@ -97,19 +113,34 @@ function CreatorPage() {
         email: c.data.email ?? "",
         positioning: c.data.positioning ?? "",
         objectives: c.data.objectives ?? "",
-        internal_notes: c.data.internal_notes ?? "",
+        internal_notes: privateDetails.data?.internal_notes ?? "",
         status: c.data.status,
       });
-  }, [c.data]);
+  }, [c.data, privateDetails.data]);
 
   const save = useMutation({
-    mutationFn: async (patch: Database["public"]["Tables"]["creators"]["Update"]) => {
-      const { error } = await supabase.from("creators").update(patch).eq("id", id);
-      if (error) throw error;
+    mutationFn: async ({
+      creator,
+      internal_notes,
+    }: {
+      creator?: Database["public"]["Tables"]["creators"]["Update"];
+      internal_notes?: string;
+    }) => {
+      if (creator) {
+        const { error } = await supabase.from("creators").update(creator).eq("id", id);
+        if (error) throw error;
+      }
+      if (internal_notes !== undefined) {
+        const { error } = await supabase
+          .from("creator_private_details")
+          .upsert({ creator_id: id, internal_notes }, { onConflict: "creator_id" });
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       toast.success("Saved");
       qc.invalidateQueries({ queryKey: ["creators"] });
+      qc.invalidateQueries({ queryKey: ["creator-private-details"] });
       qc.invalidateQueries({ queryKey: ["tasks"] });
     },
     onError: (e) => toast.error((e as Error).message),
@@ -138,13 +169,13 @@ function CreatorPage() {
       const path = `${id}/internal.${extension}`;
       await uploadImage("creator-photos", path, file);
       const { error } = await supabase
-        .from("creators")
-        .update({ internal_photo_path: path })
-        .eq("id", id);
+        .from("creator_private_details")
+        .upsert({ creator_id: id, internal_photo_path: path }, { onConflict: "creator_id" });
       if (error) throw error;
       toast.success("Internal creator photo updated");
-      await c.refetch();
+      await privateDetails.refetch();
       qc.invalidateQueries({ queryKey: ["creators", "list"] });
+      qc.invalidateQueries({ queryKey: ["creator-private-details"] });
     } catch (error) {
       toast.error((error as Error).message);
     } finally {
@@ -158,6 +189,9 @@ function CreatorPage() {
     return (
       <EmptyState title="Creator not found" body="It may not exist or you may not have access." />
     );
+  if (canSeePrivateDetails && privateDetails.isLoading) return <Loading />;
+  if (canSeePrivateDetails && privateDetails.error)
+    return <ErrorNote error={privateDetails.error} />;
   const archived = !!c.data.archived_at;
 
   return (
@@ -176,7 +210,9 @@ function CreatorPage() {
               <Button
                 variant="outline"
                 onClick={() =>
-                  save.mutate({ archived_at: archived ? null : new Date().toISOString() })
+                  save.mutate({
+                    creator: { archived_at: archived ? null : new Date().toISOString() },
+                  })
                 }
               >
                 {archived ? "Restore" : "Archive"}
@@ -211,9 +247,15 @@ function CreatorPage() {
           onSubmit={(e) => {
             e.preventDefault();
             save.mutate({
-              ...f,
-              legal_name: f.legal_name || null,
-              email: f.email.toLowerCase() || null,
+              creator: {
+                stage_name: f.stage_name,
+                legal_name: f.legal_name || null,
+                email: f.email.toLowerCase() || null,
+                positioning: f.positioning || null,
+                objectives: f.objectives || null,
+                status: f.status,
+              },
+              internal_notes: f.internal_notes,
             });
           }}
         >

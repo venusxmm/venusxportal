@@ -42,8 +42,20 @@ function Creators() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("creators")
-        .select("id,stage_name,email,status,archived_at,user_id,created_at,internal_photo_path")
+        .select("id,stage_name,email,status,archived_at,user_id,created_at")
         .order("stage_name");
+      if (error) throw error;
+      return data;
+    },
+  });
+  const canSeePrivateDetails = !!me?.isStaff;
+  const privateDetails = useQuery({
+    queryKey: ["creator-private-details", "list"],
+    enabled: canSeePrivateDetails,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("creator_private_details")
+        .select("creator_id,internal_photo_path");
       if (error) throw error;
       return data;
     },
@@ -91,6 +103,8 @@ function Creators() {
         <Loading />
       ) : list.error ? (
         <ErrorNote error={list.error} retry={() => list.refetch()} />
+      ) : privateDetails.error ? (
+        <ErrorNote error={privateDetails.error} retry={() => privateDetails.refetch()} />
       ) : rows.length === 0 ? (
         <EmptyState
           title="No creators found"
@@ -109,7 +123,14 @@ function Creators() {
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-3">
-                  <CreatorAvatar path={c.internal_photo_path} name={c.stage_name} size="sm" />
+                  <CreatorAvatar
+                    path={
+                      privateDetails.data?.find((details) => details.creator_id === c.id)
+                        ?.internal_photo_path ?? null
+                    }
+                    name={c.stage_name}
+                    size="sm"
+                  />
                   <p className="text-lg font-semibold">{c.stage_name}</p>
                 </div>
                 <Pill value={c.status} />
@@ -151,9 +172,11 @@ function NewCreator() {
         const path = `${creator.id}/internal.${extension}`;
         await uploadImage("creator-photos", path, photo);
         const { error: photoError } = await supabase
-          .from("creators")
-          .update({ internal_photo_path: path })
-          .eq("id", creator.id);
+          .from("creator_private_details")
+          .upsert(
+            { creator_id: creator.id, internal_photo_path: path },
+            { onConflict: "creator_id" },
+          );
         if (photoError) throw photoError;
       }
     },
@@ -162,6 +185,7 @@ function NewCreator() {
         f.status === "onboarding" ? "Creator added — onboarding tasks created." : "Creator added.",
       );
       qc.invalidateQueries({ queryKey: ["creators"] });
+      qc.invalidateQueries({ queryKey: ["creator-private-details"] });
       qc.invalidateQueries({ queryKey: ["tasks"] });
       setOpen(false);
       setF({ stage_name: "", legal_name: "", email: "", status: "lead" });

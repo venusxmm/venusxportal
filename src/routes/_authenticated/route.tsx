@@ -5,7 +5,6 @@ import { Menu, Settings, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useMe, type Me } from "@/lib/me";
 import { Loading } from "@/components/portal";
-import logo from "@/assets/venusx-logo.jpeg.asset.json";
 import { cn } from "@/lib/utils";
 import { APP_VERSION_LABEL } from "@/lib/version";
 
@@ -102,7 +101,7 @@ function Shell() {
         )}
       >
         <div className="mb-8 flex items-center gap-3 px-2">
-          <img src={logo.url} alt="" className="h-9 w-9 rounded-full" />
+          <img src="/venusx-logo.jpeg" alt="" className="h-9 w-9 rounded-full" />
           <span className="text-lg font-bold uppercase tracking-[0.3em] text-gold-gradient">
             VenusX
           </span>

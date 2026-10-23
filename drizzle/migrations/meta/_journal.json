@@ -78,6 +78,13 @@
       "when": 1792712008000,
       "tag": "0010_team_member_removal",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792712009000,
+      "tag": "0011_creator_private_details",
+      "breakpoints": true
     }
   ]
 }
