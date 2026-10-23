@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { copyText } from "@/lib/clipboard";
 import { Copy } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -144,7 +145,8 @@ function Team() {
 
   if (!me?.isExec) return <EmptyState title="Restricted" body="Only executives manage access." />;
   if (data.isLoading) return <Loading />;
-  const d = data.data!;
+  const d = data.data;
+  if (!d) return <EmptyState title="Team could not be loaded" body={data.error?.message} />;
   return (
     <div>
       <PageHeader
@@ -324,13 +326,14 @@ function InvitationPanel({
         _areas: [],
       });
       if (error) throw error;
-      await navigator.clipboard.writeText(`${window.location.origin}/auth?invite=${token}`);
+      const link = `${window.location.origin}/auth#invite=${token}`;
       if (data && typeof data === "object" && "id" in data)
         setRecentLinks((links) => ({
           ...links,
-          [String(data["id"])]: `${window.location.origin}/auth?invite=${token}`,
+          [String(data["id"])]: link,
         }));
-      toast.success("Invitation created and link copied. Email delivery was not attempted.");
+      const copied = await copyText(link);
+      toast.success(copied ? "Invitation created and link copied. Email not sent." : "Invitation created. Select and copy the link below. Email not sent.");
       setEmail("");
       onChanged();
       void data;
@@ -352,11 +355,10 @@ function InvitationPanel({
     <section className="mt-6 rounded-lg border bg-card p-5">
       <h2 className="font-medium">Invitations</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        Create a single-use link for a specific email. Email delivery still requires an external
-        provider configuration.
+        Email not configured: a verified sender domain is required.
       </p>
       <div className="mt-4 flex flex-wrap items-end gap-2">
-        <div className="min-w-64 flex-1 space-y-1">
+        <div className="min-w-0 basis-full flex-1 space-y-1 sm:basis-auto">
           <Label>Email</Label>
           <Input
             type="email"
@@ -395,12 +397,13 @@ function InvitationPanel({
               key={item.id}
               className="flex flex-wrap items-center justify-between gap-3 p-3 text-sm"
             >
-              <span>
+              <span className="min-w-0 break-all">
                 {item.email} · {item.role.replace(/^./, (letter) => letter.toUpperCase())}
                 <span className="ml-2 text-xs text-muted-foreground">
                   expires {new Date(item.expires_at).toLocaleDateString()}
                 </span>
               </span>
+              {recentLinks[item.id] && <Input aria-label={`Invitation URL for ${item.email}`} readOnly value={recentLinks[item.id]} onFocus={e => e.target.select()} className="basis-full" />}
               <Button
                 variant="ghost"
                 size="sm"
@@ -413,9 +416,7 @@ function InvitationPanel({
                 onClick={() => {
                   const link = recentLinks[item.id];
                   if (link)
-                    void navigator.clipboard
-                      .writeText(link)
-                      .then(() => toast.success("Invitation link copied"));
+                    void copyText(link).then(copied => copied ? toast.success("Invitation link copied") : toast.error("Copy unavailable. Select the link below."));
                 }}
               >
                 <Copy className="mr-1 h-4 w-4" /> Copy link

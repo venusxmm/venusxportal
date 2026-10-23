@@ -19,6 +19,8 @@ export interface CurrencySummary {
   agencyRevenue: number;
   /** Creator's portion of revenue. */
   creatorRevenue: number;
+  /** Creator earned share less settlements; payouts are not agency expenses. */
+  creatorBalance: number;
   /** agencyRevenue - expenses */
   netProfit: number;
   /** netProfit / agencyRevenue, or null when there is no agency revenue */
@@ -87,6 +89,7 @@ export function summarize(rows: LedgerRow[]): CurrencySummary[] {
         payouts: a.pay / 100,
         agencyRevenue: a.agency / 100,
         creatorRevenue: (a.rev - a.agency) / 100,
+        creatorBalance: (a.rev - a.agency - a.pay) / 100,
         netProfit: net / 100,
         margin: a.agency === 0 ? null : net / a.agency,
       };
@@ -119,6 +122,7 @@ function emptySummary(currency: string): CurrencySummary {
     payouts: 0,
     agencyRevenue: 0,
     creatorRevenue: 0,
+    creatorBalance: 0,
     netProfit: 0,
     margin: null,
   };

@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, Copy, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,6 +8,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { TASK_STATUS_LABEL, useMe } from "@/lib/me";
 import {
   DEFAULT_TIME_BLOCKS,
+  compareScheduledTasks,
   findTimeBlock,
   readTimeBlocks,
   timeForBlock,
@@ -136,7 +137,14 @@ function Tasks() {
   const canDeleteTask = (task: Task) =>
     !!me && (me.isExec || (me.isStaff && task.created_by === me.id));
 
+  const statusRequests = useRef(new Set<string>());
   const setStatus = useMutation({
+    onMutate: async ({ task, status }) => {
+      await qc.cancelQueries({ queryKey: ["tasks"] });
+      const previous = qc.getQueryData<Task[]>(["tasks", "all"]);
+      qc.setQueryData<Task[]>(["tasks", "all"], rows => rows?.map(row => row.id === task.id ? { ...row, status } : row));
+      return { previous };
+    },
     mutationFn: async ({ task, status }: { task: Task; status: TaskStatus }) => {
       if (me?.isStaff) {
         const { data, error } = await supabase
@@ -158,7 +166,14 @@ function Tasks() {
       toast.success("Task status updated");
       qc.invalidateQueries({ queryKey: ["tasks"] });
     },
-    onError: (e) => toast.error((e as Error).message),
+    onError: (e, _variables, context) => {
+      if (context?.previous) qc.setQueryData(["tasks", "all"], context.previous);
+      toast.error((e as Error).message);
+    },
+    onSettled: (_data, _error, { task }) => {
+      statusRequests.current.delete(task.id);
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+    },
   });
   const deleteTask = useMutation({
     mutationFn: async (task: Task) => {
@@ -234,8 +249,11 @@ function Tasks() {
     if (window.confirm(`Permanently delete “${task.title}”?`)) deleteTask.mutate(task);
   };
   const duplicate = (task: Task) => duplicateTask.mutate(task);
-  const toggleComplete = (task: Task) =>
+  const toggleComplete = (task: Task) => {
+    if (statusRequests.current.has(task.id)) return;
+    statusRequests.current.add(task.id);
     setStatus.mutate({ task, status: task.status === "done" ? "todo" : "done" });
+  };
   const moveStatus = (task: Task, status: TaskStatus) => {
     if (me?.isStaff) moveTask.mutate({ task, status });
     else setStatus.mutate({ task, status });
@@ -259,7 +277,7 @@ function Tasks() {
           t.title.toLowerCase().includes(query) ||
           (t.description ?? "").toLowerCase().includes(query)
         );
-      }),
+      }).sort(compareScheduledTasks),
     [tasks.data, fStatus, fCreator, fPriority, fMemberType, mineOnly, q, me?.id],
   );
 
@@ -334,7 +352,7 @@ function Tasks() {
           <Switch checked={mineOnly} onCheckedChange={setMineOnly} />
           Mine
         </label>
-        <Tabs value={view} onValueChange={setView} className="ml-auto">
+        <Tabs value={view} onValueChange={setView} className="w-full overflow-x-auto sm:ml-auto sm:w-auto">
           <TabsList>
             <TabsTrigger value="list">List</TabsTrigger>
             <TabsTrigger value="board">Board</TabsTrigger>
@@ -348,7 +366,7 @@ function Tasks() {
         <Loading />
       ) : tasks.error ? (
         <ErrorNote error={tasks.error} retry={() => tasks.refetch()} />
-      ) : rows.length === 0 ? (
+      ) : rows.length === 0 && view !== "schedule" ? (
         <EmptyState title="No tasks match" body="Adjust filters or create a task." />
       ) : view === "list" ? (
         <div className="overflow-x-auto rounded-lg border bg-card">
@@ -426,7 +444,7 @@ function Tasks() {
                       canManage={!!me?.isStaff}
                       canDelete={canDeleteTask(t)}
                       canChangeStatus={!!(me?.isStaff || (me?.isCreator && t.visible_to_creator))}
-                      disabled={deleteTask.isPending || duplicateTask.isPending}
+                      disabled={setStatus.isPending || moveTask.isPending || deleteTask.isPending || duplicateTask.isPending}
                     />
                   </td>
                 </tr>
@@ -506,7 +524,7 @@ function Tasks() {
                         canManage={!!me?.isStaff}
                         canDelete={canDeleteTask(t)}
                         canChangeStatus={!!(me?.isStaff || (me?.isCreator && t.visible_to_creator))}
-                        disabled={deleteTask.isPending || duplicateTask.isPending}
+                        disabled={setStatus.isPending || moveTask.isPending || deleteTask.isPending || duplicateTask.isPending}
                       />
                     </div>
                   ))}
@@ -529,7 +547,7 @@ function Tasks() {
           canChangeStatus={!!me?.isStaff || (me?.isCreator ?? false)}
           canManage={!!me?.isStaff}
           canDelete={canDeleteTask}
-          disabled={deleteTask.isPending || duplicateTask.isPending}
+          disabled={setStatus.isPending || moveTask.isPending || deleteTask.isPending || duplicateTask.isPending}
         />
       )}
       {editing && (
@@ -574,18 +592,21 @@ function DailySchedule({
   disabled: boolean;
 }) {
   const [showSettings, setShowSettings] = useState(false);
+  const [draft, setDraft] = useState<TimeBlock[]>([]);
+  const [validation, setValidation] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const blockFor = (time: string | null) => findTimeBlock(blocks, time);
-  const update = (id: string, key: "start" | "end", value: string) => {
-    const next = blocks.map((block) =>
-      block.id === id ? { ...block, [key]: value || block[key] } : block,
-    );
+  const update = (id: string, key: "label" | "start" | "end", value: string) => {
+    setDraft(current => current.map(block => block.id === id ? { ...block, [key]: value } : block));
+    setValidation(null);
+  };
+  const saveBlocks = () => {
+    const next = [...draft].sort((a, b) => a.start.localeCompare(b.start));
     const error = validateTimeBlocks(next);
-    if (error) {
-      toast.error(error);
-      return;
-    }
+    setValidation(error);
+    if (error) return;
     onBlocksChange(next);
+    setShowSettings(false);
   };
   const dropOnBlock = (event: React.DragEvent<HTMLDivElement>, block: TimeBlock | null) => {
     event.preventDefault();
@@ -596,41 +617,36 @@ function DailySchedule({
   };
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          Tasks are grouped by scheduled time. Tasks without a time stay in the unscheduled bucket.
-        </p>
-        <Button variant="outline" size="sm" onClick={() => setShowSettings(!showSettings)}>
-          {showSettings ? "Hide time blocks" : "Configure time blocks"}
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        <Button variant="outline" size="sm" onClick={() => { setDraft(blocks.map(block => ({ ...block }))); setValidation(null); setShowSettings(true); }}>
+          Configure time blocks
         </Button>
       </div>
-      {showSettings && (
-        <div className="grid gap-4 rounded-lg border bg-card p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-          {blocks.map((block) => (
-            <div key={block.id} className="min-w-0 space-y-2 rounded-md border p-3">
-              <Label className="block truncate">{block.label}</Label>
-              <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-                <Input
-                  aria-label={`${block.label} starts`}
-                  type="time"
-                  value={block.start}
-                  onChange={(event) => update(block.id, "start", event.target.value)}
-                />
-                <span aria-hidden="true">–</span>
-                <Input
-                  aria-label={`${block.label} ends`}
-                  type="time"
-                  value={block.end === "24:00" ? "23:59" : block.end}
-                  onChange={(event) => update(block.id, "end", event.target.value)}
-                />
+      <Dialog open={showSettings} onOpenChange={setShowSettings}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Configure time blocks</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            {draft.map(block => (
+              <div key={block.id} className="space-y-2 border-b pb-3">
+                <div className="flex items-center gap-2">
+                  <Input aria-label="Block name" value={block.label} onChange={e => update(block.id, "label", e.target.value)} className="min-w-0" />
+                  <Button variant="ghost" size="icon" aria-label={`Delete ${block.label} block`} onClick={() => setDraft(current => current.filter(item => item.id !== block.id))}><Trash2 className="h-4 w-4" /></Button>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="min-w-0 space-y-1"><Label>Start</Label><Input className="min-w-0 w-full" aria-label={`${block.label} starts`} type="time" value={block.start} onChange={e => update(block.id, "start", e.target.value)} /></div>
+                  <div className="min-w-0 space-y-1"><Label>End</Label><Input className="min-w-0 w-full" aria-label={`${block.label} ends`} value={block.end} placeholder="24:00" onChange={e => update(block.id, "end", e.target.value)} /></div>
+                </div>
               </div>
-              {block.end === "24:00" && (
-                <p className="text-xs text-muted-foreground">End of day (24:00)</p>
-              )}
+            ))}
+            {validation && <p role="alert" className="text-sm text-destructive">{validation}</p>}
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={() => setDraft(current => [...current, { id: crypto.randomUUID(), label: "New block", start: "18:00", end: "24:00" }])}>Add block</Button>
+              <Button onClick={saveBlocks}>Save blocks</Button>
+              <Button variant="ghost" onClick={() => setShowSettings(false)}>Cancel</Button>
             </div>
-          ))}
-        </div>
-      )}
+          </div>
+        </DialogContent>
+      </Dialog>
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
         {[...blocks, { id: "unscheduled", label: "Unscheduled", start: "", end: "" }].map(
           (block) => {
@@ -664,14 +680,14 @@ function DailySchedule({
                         setDragging(true);
                       }}
                       onDragEnd={() => setDragging(false)}
-                      className="rounded-md border p-3 text-sm hover:border-gold/50"
+                      className="min-w-0 rounded-md border p-3 text-sm hover:border-gold/50"
                     >
                       <button
                         className="flex w-full items-start justify-between gap-2 text-left"
                         disabled={!canManage}
                         onClick={() => onOpen(task)}
                       >
-                        <span>{task.title}</span>
+                        <span className="min-w-0 break-words">{task.title}</span>
                         <Pill value={task.priority} />
                       </button>
                       <p className="mt-1 text-xs text-muted-foreground">
@@ -692,7 +708,7 @@ function DailySchedule({
                         <SelectTrigger
                           aria-label={`Schedule ${task.title}`}
                           className="mt-2 h-8"
-                          disabled={!canManage || !!task.archived_at}
+                          disabled={disabled || !canManage || !!task.archived_at}
                         >
                           <SelectValue />
                         </SelectTrigger>
@@ -713,7 +729,7 @@ function DailySchedule({
                         onToggleComplete={() => onToggleComplete(task)}
                         canManage={canManage}
                         canDelete={canDelete(task)}
-                        canChangeStatus={canChangeStatus && task.visible_to_creator}
+                        canChangeStatus={canManage || (canChangeStatus && task.visible_to_creator)}
                         disabled={disabled}
                       />
                     </div>
@@ -760,7 +776,7 @@ function TaskActions({
         disabled={disabled || !!task.archived_at || !canChangeStatus}
         onClick={onToggleComplete}
       >
-        <CheckCircle2 className={`h-4 w-4 ${task.status === "done" ? "text-emerald-600" : ""}`} />
+        <CheckCircle2 className={`h-4 w-4 ${task.status === "done" ? "text-success" : ""}`} />
       </Button>
       {canManage && (
         <Button

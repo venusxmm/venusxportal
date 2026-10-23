@@ -1,5 +1,18 @@
 export type TimeBlock = { id: string; label: string; start: string; end: string };
 
+export function compareScheduledTasks(
+  a: { id: string; due_date: string | null; due_time: string | null; status: string },
+  b: { id: string; due_date: string | null; due_time: string | null; status: string },
+) {
+  // Open work first; overdue dates naturally precede upcoming dates. Nulls last.
+  return (
+    Number(a.status === "done") - Number(b.status === "done") ||
+    (a.due_date ?? "9999-12-31").localeCompare(b.due_date ?? "9999-12-31") ||
+    (a.due_time ?? "24:00").localeCompare(b.due_time ?? "24:00") ||
+    a.id.localeCompare(b.id)
+  );
+}
+
 export const DEFAULT_TIME_BLOCKS: TimeBlock[] = [
   { id: "early", label: "Early morning", start: "00:00", end: "06:00" },
   { id: "morning", label: "Morning", start: "06:00", end: "12:00" },
@@ -20,6 +33,7 @@ export function validateTimeBlocks(blocks: TimeBlock[]): string | null {
   const ids = new Set<string>();
   let previousEnd = -1;
   for (const block of blocks) {
+    if (!block.label.trim()) return "Every time block needs a name.";
     if (!block.id || ids.has(block.id)) return "Time block IDs must be unique.";
     ids.add(block.id);
     const start = timeToMinutes(block.start);
