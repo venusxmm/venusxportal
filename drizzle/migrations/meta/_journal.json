@@ -127,6 +127,13 @@
       "when": 1792788400000,
       "tag": "0017_expense_reference_reuse",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792793100000,
+      "tag": "0018_delete_all_transactions",
+      "breakpoints": true
     }
   ]
 }
