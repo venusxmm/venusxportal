@@ -40,8 +40,70 @@ describe("finance ledger math", () => {
     expect(s.agencyRevenue).toBe(400);
     expect(s.creatorRevenue).toBe(600);
     expect(s.creatorBalance).toBe(600);
+    expect(s.deductibleExpenses).toBe(150);
     expect(s.netProfit).toBe(250);
     expect(s.margin).toBeCloseTo(0.625);
+  });
+
+  it("deducts only opted-in expenses from agency net profit, once and per currency", () => {
+    const summary = summarize([
+      {
+        kind: "revenue",
+        amount: 1000,
+        currency: "USD",
+        occurred_on: "2026-01-01",
+        agency_share_pct: 40,
+      },
+      {
+        kind: "expense",
+        amount: 100,
+        currency: "USD",
+        occurred_on: "2026-01-02",
+        deduct_from_agency_cut: true,
+      },
+      {
+        kind: "expense",
+        amount: 60,
+        currency: "USD",
+        occurred_on: "2026-01-03",
+        deduct_from_agency_cut: false,
+      },
+      {
+        kind: "expense",
+        amount: 5,
+        currency: "EUR",
+        occurred_on: "2026-01-04",
+        deduct_from_agency_cut: false,
+      },
+    ]);
+
+    expect(summary).toMatchObject([
+      { currency: "EUR", expenses: 5, deductibleExpenses: 0, agencyRevenue: 0, netProfit: 0 },
+      {
+        currency: "USD",
+        expenses: 160,
+        deductibleExpenses: 100,
+        agencyRevenue: 400,
+        netProfit: 300,
+        margin: 0.75,
+      },
+    ]);
+  });
+
+  it("defaults legacy and unconfigured expenses to deducting from agency cut", () => {
+    const [summary] = summarize([
+      { kind: "revenue", amount: 100, currency: "USD", occurred_on: "2026-01-01" },
+      { kind: "expense", amount: 10, currency: "USD", occurred_on: "2026-01-02" },
+      {
+        kind: "expense",
+        amount: 5,
+        currency: "USD",
+        occurred_on: "2026-01-03",
+        deduct_from_agency_cut: null,
+      },
+    ]);
+
+    expect(summary).toMatchObject({ expenses: 15, deductibleExpenses: 15, netProfit: 85 });
   });
 
   it("deducts each non-voided payout once from the creator balance, per currency", () => {

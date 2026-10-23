@@ -106,7 +106,9 @@ function StaffOverview() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("transactions")
-        .select("kind,amount,currency,occurred_on,agency_share_pct,archived_at")
+        .select(
+          "kind,amount,currency,occurred_on,agency_share_pct,deduct_from_agency_cut,archived_at",
+        )
         .gte("occurred_on", month + "-01");
       if (error) throw error;
       return data;
@@ -153,7 +155,11 @@ function StaffOverview() {
             fin.map((s) => (
               <div key={s.currency} className="grid grid-cols-2 gap-4 lg:grid-cols-4">
                 <Stat label={`Revenue · ${s.currency}`} value={money(s.revenue, s.currency)} />
-                <Stat label="Expenses" value={money(s.expenses, s.currency)} />
+                <Stat
+                  label="Expenses"
+                  value={money(s.expenses, s.currency)}
+                  hint={`${money(s.deductibleExpenses, s.currency)} deducted from agency cut`}
+                />
                 <Stat label="Agency share" value={money(s.agencyRevenue, s.currency)} />
                 <Stat
                   label="Net profit"

@@ -7,13 +7,17 @@ export interface LedgerRow {
   currency: string;
   occurred_on: string; // YYYY-MM-DD
   agency_share_pct?: number | string | null;
+  deduct_from_agency_cut?: boolean | null;
   archived_at?: string | null;
 }
 
 export interface CurrencySummary {
   currency: string;
   revenue: number;
+  /** All recorded expenses, including those excluded from agency net profit. */
   expenses: number;
+  /** Expenses deducted from the agency's share when computing net profit. */
+  deductibleExpenses: number;
   payouts: number;
   /** Agency's portion of revenue (uses agency_share_pct, defaults to 100%). */
   agencyRevenue: number;
@@ -21,7 +25,7 @@ export interface CurrencySummary {
   creatorRevenue: number;
   /** Creator earned share less settlements; payouts are not agency expenses. */
   creatorBalance: number;
-  /** agencyRevenue - expenses */
+  /** agencyRevenue - deductibleExpenses */
   netProfit: number;
   /** netProfit / agencyRevenue, or null when there is no agency revenue */
   margin: number | null;
@@ -107,31 +111,37 @@ export function summarizeCreatorBalances(
  * returns one summary per currency. Archived rows are excluded.
  */
 export function summarize(rows: LedgerRow[]): CurrencySummary[] {
-  const map = new Map<string, { rev: number; exp: number; pay: number; agency: number }>();
+  const map = new Map<
+    string,
+    { rev: number; exp: number; deductibleExp: number; pay: number; agency: number }
+  >();
   for (const r of rows) {
     if (r.archived_at) continue;
     const cur = String(r.currency ?? "").toUpperCase();
     if (!cur) continue;
     const amount = Number(r.amount);
     if (!Number.isFinite(amount)) continue;
-    const acc = map.get(cur) ?? { rev: 0, exp: 0, pay: 0, agency: 0 };
+    const acc = map.get(cur) ?? { rev: 0, exp: 0, deductibleExp: 0, pay: 0, agency: 0 };
     const c = cents(amount);
     if (r.kind === "revenue") {
       acc.rev += c;
       const split = splitRevenue(c / 100, parseAgencyShare(r.agency_share_pct));
       if (split) acc.agency += cents(split.agency);
-    } else if (r.kind === "expense") acc.exp += c;
-    else acc.pay += c;
+    } else if (r.kind === "expense") {
+      acc.exp += c;
+      if (r.deduct_from_agency_cut !== false) acc.deductibleExp += c;
+    } else acc.pay += c;
     map.set(cur, acc);
   }
   return [...map.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([currency, a]) => {
-      const net = a.agency - a.exp;
+      const net = a.agency - a.deductibleExp;
       return {
         currency,
         revenue: a.rev / 100,
         expenses: a.exp / 100,
+        deductibleExpenses: a.deductibleExp / 100,
         payouts: a.pay / 100,
         agencyRevenue: a.agency / 100,
         creatorRevenue: (a.rev - a.agency) / 100,
@@ -165,6 +175,7 @@ function emptySummary(currency: string): CurrencySummary {
     currency,
     revenue: 0,
     expenses: 0,
+    deductibleExpenses: 0,
     payouts: 0,
     agencyRevenue: 0,
     creatorRevenue: 0,
