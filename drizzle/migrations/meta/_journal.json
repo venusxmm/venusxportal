@@ -92,6 +92,20 @@
       "when": 1792732724000,
       "tag": "0012_task_returning_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1792732725000,
+      "tag": "0013_creator_payout_balance",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1792732726000,
+      "tag": "0014_transactions_archive_only",
+      "breakpoints": true
     }
   ]
 }

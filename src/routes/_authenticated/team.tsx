@@ -146,15 +146,21 @@ function Team() {
   if (!me?.isExec) return <EmptyState title="Restricted" body="Only executives manage access." />;
   if (data.isLoading) return <Loading />;
   const d = data.data;
-  if (!d) return <EmptyState title="Team could not be loaded" body={data.error?.message} />;
+  if (!d)
+    return (
+      <EmptyState
+        title="Team could not be loaded"
+        body={data.error?.message ?? "No team data was returned."}
+      />
+    );
   return (
     <div>
       <PageHeader
         title="Team & Access"
         subtitle="People sign up themselves; you grant roles and work areas here. Every change is audited."
       />
-      <div className="overflow-x-auto rounded-lg border bg-card">
-        <table className="w-full text-sm">
+      <div className="max-w-full overflow-x-auto rounded-lg border bg-card">
+        <table className="w-full min-w-[1080px] text-sm">
           <thead className="text-left text-xs uppercase tracking-widest text-muted-foreground">
             <tr>
               <th className="p-3">Person</th>
@@ -333,10 +339,13 @@ function InvitationPanel({
           [String(data["id"])]: link,
         }));
       const copied = await copyText(link);
-      toast.success(copied ? "Invitation created and link copied. Email not sent." : "Invitation created. Select and copy the link below. Email not sent.");
+      toast.success(
+        copied
+          ? "Invitation created and link copied. Email not sent."
+          : "Invitation created. Select and copy the link below. Email not sent.",
+      );
       setEmail("");
       onChanged();
-      void data;
     } catch (error) {
       toast.error((error as Error).message);
     } finally {
@@ -403,7 +412,15 @@ function InvitationPanel({
                   expires {new Date(item.expires_at).toLocaleDateString()}
                 </span>
               </span>
-              {recentLinks[item.id] && <Input aria-label={`Invitation URL for ${item.email}`} readOnly value={recentLinks[item.id]} onFocus={e => e.target.select()} className="basis-full" />}
+              {recentLinks[item.id] && (
+                <Input
+                  aria-label={`Invitation URL for ${item.email}`}
+                  className="min-w-0 basis-full font-mono text-xs"
+                  readOnly
+                  value={recentLinks[item.id]}
+                  onFocus={(event) => event.currentTarget.select()}
+                />
+              )}
               <Button
                 variant="ghost"
                 size="sm"
@@ -416,7 +433,13 @@ function InvitationPanel({
                 onClick={() => {
                   const link = recentLinks[item.id];
                   if (link)
-                    void copyText(link).then(copied => copied ? toast.success("Invitation link copied") : toast.error("Copy unavailable. Select the link below."));
+                    void copyText(link).then((copied) =>
+                      toast[copied ? "success" : "error"](
+                        copied
+                          ? "Invitation link copied"
+                          : "Copy unavailable. Select the link below.",
+                      ),
+                    );
                 }}
               >
                 <Copy className="mr-1 h-4 w-4" /> Copy link
