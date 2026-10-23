@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { summarize } from "./finance";
 
 const deleteMigration = readFileSync(
   resolve(process.cwd(), "drizzle/migrations/0009_finance_hard_delete.sql"),
@@ -23,6 +24,10 @@ const postCreatorPayoutMigration = readFileSync(
 );
 const expenseAgencyCutAndDeleteMigration = readFileSync(
   resolve(process.cwd(), "drizzle/migrations/0016_expense_agency_cut_and_delete.sql"),
+  "utf8",
+);
+const expenseReferenceReuseMigration = readFileSync(
+  resolve(process.cwd(), "drizzle/migrations/0017_expense_reference_reuse.sql"),
   "utf8",
 );
 const ids = {
@@ -170,6 +175,8 @@ describe("finance row-level security integration", () => {
     await db.exec(postCreatorPayoutMigration);
     await db.exec(expenseAgencyCutAndDeleteMigration);
     await db.exec(expenseAgencyCutAndDeleteMigration);
+    await db.exec(expenseReferenceReuseMigration);
+    await db.exec(expenseReferenceReuseMigration);
   });
 
   afterEach(async () => {
@@ -300,6 +307,122 @@ describe("finance row-level security integration", () => {
       ),
     );
     expect(updated[0]?.deduct_from_agency_cut).toBe(false);
+  });
+
+  it("allows repeated expense references while preserving separate edits and deletion", async () => {
+    const externalRef = "OnlyMonster monthly subscription";
+    const { rows } = await asUser(ids.executive, () =>
+      db.query<{
+        id: string;
+        amount: string;
+        currency: string;
+        occurred_on: string;
+        category: string;
+        deduct_from_agency_cut: boolean;
+      }>(
+        `insert into public.transactions
+          (kind, amount, currency, occurred_on, category, external_ref, deduct_from_agency_cut)
+        values
+          ('expense', 19.99, 'USD', '2026-10-01', 'Subscription October', $1, true),
+          ('expense', 24.99, 'USD', '2026-11-01', 'Subscription November', $1, false)
+        returning id, amount::text, currency, occurred_on::text, category, deduct_from_agency_cut`,
+        [externalRef],
+      ),
+    );
+
+    expect(rows).toHaveLength(2);
+    expect(new Set(rows.map((row) => row.id)).size).toBe(2);
+    expect(rows.map((row) => row.amount)).toEqual(["19.99", "24.99"]);
+    expect(rows.map((row) => row.deduct_from_agency_cut)).toEqual([true, false]);
+
+    const [first, second] = rows;
+    const [initialSummary] = summarize([
+      {
+        kind: "expense",
+        amount: first!.amount,
+        currency: first!.currency,
+        occurred_on: first!.occurred_on,
+        deduct_from_agency_cut: first!.deduct_from_agency_cut,
+      },
+      {
+        kind: "expense",
+        amount: second!.amount,
+        currency: second!.currency,
+        occurred_on: second!.occurred_on,
+        deduct_from_agency_cut: second!.deduct_from_agency_cut,
+      },
+    ]);
+    expect(initialSummary).toMatchObject({ expenses: 44.98, deductibleExpenses: 19.99 });
+
+    await asUser(ids.executive, () =>
+      db.query(
+        "update public.transactions set amount = 20.99, category = 'Updated October' where id = $1",
+        [first!.id],
+      ),
+    );
+    const { rows: afterEdit } = await db.query<{ id: string; amount: string; category: string }>(
+      "select id, amount::text, category from public.transactions where id = any($1::uuid[]) order by id",
+      [[first!.id, second!.id]],
+    );
+    expect(afterEdit).toContainEqual({
+      id: first!.id,
+      amount: "20.99",
+      category: "Updated October",
+    });
+    expect(afterEdit).toContainEqual({
+      id: second!.id,
+      amount: "24.99",
+      category: "Subscription November",
+    });
+
+    await asUser(ids.executive, () => db.query("select public.delete_expense($1)", [first!.id]));
+    const { rows: afterDelete } = await db.query<{
+      id: string;
+      external_ref: string;
+      amount: string;
+      category: string;
+    }>(
+      "select id, external_ref, amount::text, category from public.transactions where external_ref = $1",
+      [externalRef],
+    );
+    expect(afterDelete).toEqual([
+      {
+        id: second!.id,
+        external_ref: externalRef,
+        amount: "24.99",
+        category: "Subscription November",
+      },
+    ]);
+  });
+
+  it("keeps external reference uniqueness for revenue and payouts", async () => {
+    await asUser(ids.executive, () =>
+      db.query(
+        "insert into public.transactions (kind, amount, category, external_ref) values ('revenue', 10, 'QA revenue', 'unique-revenue-ref')",
+      ),
+    );
+    await expect(
+      asUser(ids.executive, () =>
+        db.query(
+          "insert into public.transactions (kind, amount, category, external_ref) values ('revenue', 1, 'QA revenue duplicate', 'unique-revenue-ref')",
+        ),
+      ),
+    ).rejects.toThrow(/transactions_non_expense_external_ref_key/i);
+
+    await asUser(ids.executive, () =>
+      db.query(
+        "insert into public.transactions (kind, amount, category, creator_id, external_ref) values ('payout', 1, 'QA payout', $1, 'unique-payout-ref')",
+        [ids.creatorAccount],
+      ),
+    );
+    await expect(
+      asUser(ids.executive, () =>
+        db.query(
+          "insert into public.transactions (kind, amount, category, creator_id, external_ref) values ('payout', 0.50, 'QA duplicate payout', $1, 'unique-payout-ref')",
+          [ids.creatorAccount],
+        ),
+      ),
+    ).rejects.toThrow(/transactions_non_expense_external_ref_key/i);
   });
 
   it("exposes only explicitly shared entries to their creator account", async () => {
