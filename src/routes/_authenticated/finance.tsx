@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { ArchiveRestore, Pencil, Trash2 } from "lucide-react";
+import { ArchiveRestore, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
@@ -13,7 +13,9 @@ import {
   monthly,
   money,
   splitRevenue,
+  summarizeCreatorBalances,
   summarize,
+  validateTransactionCreator,
 } from "@/lib/finance";
 import { EmptyState, ErrorNote, Loading, PageHeader, Pill, Stat } from "@/components/portal";
 import { Button } from "@/components/ui/button";
@@ -99,27 +101,26 @@ function Finance() {
       if (error) throw error;
       if (!data?.length) throw new Error("Transaction was not found or update was not authorized.");
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["transactions"] }),
-    onError: (e) => toast.error((e as Error).message),
-  });
-  const deleteTxn = useMutation({
-    mutationFn: async (id: string) => {
-      const { data, error } = await supabase
-        .from("transactions")
-        .delete()
-        .eq("id", id)
-        .select("id");
-      if (error) throw error;
-      if (!data?.length)
-        throw new Error("Transaction was not found or deletion was not authorized.");
+    onMutate: async ({ id, on }) => {
+      await qc.cancelQueries({ queryKey: ["transactions", "all"] });
+      const previous = qc.getQueryData<Transaction[]>(["transactions", "all"]);
+      qc.setQueryData<Transaction[]>(["transactions", "all"], (current) =>
+        current?.map((transaction) =>
+          transaction.id === id
+            ? { ...transaction, archived_at: on ? new Date().toISOString() : null }
+            : transaction,
+        ),
+      );
+      return { previous };
     },
-    onSuccess: () => {
-      toast.success("Transaction deleted");
-      qc.invalidateQueries({ queryKey: ["transactions"] });
+    onError: (error, _variables, context) => {
+      if (context?.previous) qc.setQueryData(["transactions", "all"], context.previous);
+      toast.error((error as Error).message);
     },
-    onError: (e) => toast.error((e as Error).message),
+    onSettled: () => qc.invalidateQueries({ queryKey: ["transactions"] }),
+    onSuccess: (_data, variables) =>
+      toast.success(variables.on ? "Transaction voided" : "Transaction restored"),
   });
-
   const filtered = useMemo(
     () =>
       inRange(txns.data ?? [], from || undefined, to || undefined).filter(
@@ -128,6 +129,7 @@ function Finance() {
     [txns.data, from, to, creator],
   );
   const sums = summarize(filtered);
+  const creatorBalances = summarizeCreatorBalances(filtered);
   const primary = sums[0]?.currency;
   const chart = primary
     ? monthly(
@@ -187,15 +189,16 @@ function Finance() {
             />
           ) : (
             sums.map((s) => (
-              <div key={s.currency} className="mb-4 grid grid-cols-2 gap-4 lg:grid-cols-5">
+              <div
+                key={s.currency}
+                className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-7"
+              >
                 <Stat label={`Revenue · ${s.currency}`} value={money(s.revenue, s.currency)} />
                 <Stat label="Creator share" value={money(s.creatorRevenue, s.currency)} />
+                <Stat label="Creator balance" value={money(s.creatorBalance, s.currency)} />
+                <Stat label="Payouts" value={money(s.payouts, s.currency)} />
                 <Stat label="Agency share" value={money(s.agencyRevenue, s.currency)} />
-                <Stat
-                  label="Expenses"
-                  value={money(s.expenses, s.currency)}
-                  hint={`Payouts recorded: ${money(s.payouts, s.currency)}`}
-                />
+                <Stat label="Expenses" value={money(s.expenses, s.currency)} />
                 <Stat
                   label="Net profit"
                   value={<span className="text-gold">{money(s.netProfit, s.currency)}</span>}
@@ -203,6 +206,28 @@ function Finance() {
                 />
               </div>
             ))
+          )}
+          {creatorBalances.length > 0 && (
+            <section className="mb-6">
+              <h2 className="mb-3 font-medium">Balances by creator</h2>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {creatorBalances.map((balance) => {
+                  const creatorName =
+                    creators.data?.find((item) => item.id === balance.creatorId)?.stage_name ??
+                    filtered.find((item) => item.creator_id === balance.creatorId)?.creators
+                      ?.stage_name ??
+                    "Creator";
+                  return (
+                    <Stat
+                      key={`${balance.creatorId}:${balance.currency}`}
+                      label={`${creatorName} balance · ${balance.currency}`}
+                      value={money(balance.balance, balance.currency)}
+                      hint={`${money(balance.creatorRevenue, balance.currency)} earned · ${money(balance.payouts, balance.currency)} paid`}
+                    />
+                  );
+                })}
+              </div>
+            </section>
           )}
           {chart.length > 0 && (
             <div className="mb-6 h-64 rounded-lg border bg-card p-4">
@@ -230,8 +255,8 @@ function Finance() {
               </ResponsiveContainer>
             </div>
           )}
-          <div className="overflow-x-auto rounded-lg border bg-card">
-            <table className="w-full text-sm">
+          <div className="max-w-full overflow-x-auto rounded-lg border bg-card">
+            <table className="w-full min-w-[760px] text-sm">
               <thead className="text-left text-xs uppercase tracking-widest text-muted-foreground">
                 <tr>
                   <th className="p-3">Date</th>
@@ -293,24 +318,6 @@ function Finance() {
                         >
                           <ArchiveRestore className="h-4 w-4" />
                         </Button>
-                        <Button
-                          aria-label={`Permanently delete ${t.category}`}
-                          title="Permanently delete transaction"
-                          variant="ghost"
-                          size="icon"
-                          className="text-destructive"
-                          disabled={deleteTxn.isPending}
-                          onClick={() => {
-                            if (
-                              confirm(
-                                `Permanently delete ${t.category}? This cannot be undone. An audit event will remain.`,
-                              )
-                            )
-                              deleteTxn.mutate(t.id);
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
                       </td>
                     </tr>
                   ))}
@@ -367,19 +374,24 @@ function NewTxn({
       const pct = f.agency_share_pct === "" ? null : Number(f.agency_share_pct);
       if (pct != null && (!Number.isFinite(pct) || pct < 0 || pct > 100))
         throw new Error("Agency % must be a number from 0 to 100");
-      if (f.kind === "none") throw new Error("Select a transaction type");
-      if (f.kind === "revenue" && pct == null)
+      if (f.kind !== "revenue" && f.kind !== "expense" && f.kind !== "payout")
+        throw new Error("Select a transaction type");
+      const transactionKind: Kind = f.kind;
+      if (transactionKind === "revenue" && pct == null)
         throw new Error("Enter the agency share percentage for this revenue.");
+      const creatorId = f.creator_id === "none" ? null : f.creator_id;
+      const creatorError = validateTransactionCreator(transactionKind, creatorId);
+      if (creatorError) throw new Error(creatorError);
       if (!f.category.trim()) throw new Error("Enter a category.");
       const payload = {
-        kind: f.kind as Kind,
+        kind: transactionKind,
         amount: amt,
         currency: f.currency,
         occurred_on: f.occurred_on,
         category: f.category.trim(),
         description: f.description || null,
-        creator_id: f.creator_id === "none" ? null : f.creator_id,
-        agency_share_pct: f.kind === "revenue" ? pct : null,
+        creator_id: creatorId,
+        agency_share_pct: transactionKind === "revenue" ? pct : null,
         external_ref: f.external_ref.trim() || null,
         shared_with_creator: f.shared_with_creator,
       };
@@ -423,7 +435,7 @@ function NewTxn({
           <DialogTitle>{transaction ? "Edit ledger entry" : "New ledger entry"}</DialogTitle>
         </DialogHeader>
         <form
-          className="grid grid-cols-2 gap-3"
+          className="grid grid-cols-1 gap-3 sm:grid-cols-2"
           onSubmit={(e) => {
             e.preventDefault();
             m.mutate();
@@ -503,13 +515,17 @@ function NewTxn({
             />
           </div>
           <div className="space-y-1">
-            <Label>Creator</Label>
+            <Label>{f.kind === "payout" ? "Source creator *" : "Creator"}</Label>
             <Select value={f.creator_id} onValueChange={(v) => setF({ ...f, creator_id: v })}>
               <SelectTrigger>
-                <SelectValue />
+                <SelectValue
+                  placeholder={f.kind === "payout" ? "Select source creator" : undefined}
+                />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">No creator attribution</SelectItem>
+                <SelectItem value="none">
+                  {f.kind === "payout" ? "Select a creator" : "No creator attribution"}
+                </SelectItem>
                 {creators.map((c) => (
                   <SelectItem key={c.id} value={c.id}>
                     {c.stage_name}
@@ -554,7 +570,7 @@ function NewTxn({
               onChange={(e) => setF({ ...f, external_ref: e.target.value })}
             />
           </div>
-          <div className="col-span-2 space-y-1">
+          <div className="sm:col-span-2 space-y-1">
             <Label>Description</Label>
             <Input
               value={f.description}
@@ -562,7 +578,7 @@ function NewTxn({
             />
           </div>
           {f.creator_id !== "none" && (
-            <label className="col-span-2 flex items-center gap-2 text-sm">
+            <label className="sm:col-span-2 flex items-center gap-2 text-sm">
               <Switch
                 checked={f.shared_with_creator}
                 onCheckedChange={(v) => setF({ ...f, shared_with_creator: v })}
@@ -570,7 +586,7 @@ function NewTxn({
               Visible to this creator
             </label>
           )}
-          <Button className="col-span-2" disabled={m.isPending}>
+          <Button className="sm:col-span-2" disabled={m.isPending}>
             {transaction ? "Save changes" : "Record"}
           </Button>
         </form>

@@ -27,6 +27,14 @@ export interface CurrencySummary {
   margin: number | null;
 }
 
+export interface CreatorBalanceSummary {
+  creatorId: string;
+  currency: string;
+  creatorRevenue: number;
+  payouts: number;
+  balance: number;
+}
+
 const cents = (n: number | string) => Math.round(Number(n) * 100);
 const parseAgencyShare = (value: number | string | null | undefined) => {
   if (value == null || value === "") return 100;
@@ -54,6 +62,44 @@ export function splitRevenue(
   const totalCents = cents(value);
   const agencyCents = Math.round((totalCents * pct) / 100);
   return { agency: agencyCents / 100, creator: (totalCents - agencyCents) / 100 };
+}
+
+export function validateTransactionCreator(
+  kind: LedgerKind,
+  creatorId: string | null,
+): string | null {
+  return kind === "payout" && !creatorId ? "Select the creator receiving this payout." : null;
+}
+
+export function summarizeCreatorBalances(
+  rows: (LedgerRow & { creator_id: string | null })[],
+): CreatorBalanceSummary[] {
+  const grouped = new Map<string, { creatorId: string; rows: LedgerRow[] }>();
+  for (const row of rows) {
+    if (!row.creator_id || row.archived_at || (row.kind !== "revenue" && row.kind !== "payout"))
+      continue;
+    const key = `${row.creator_id}\u0000${row.currency.toUpperCase()}`;
+    const group = grouped.get(key) ?? { creatorId: row.creator_id, rows: [] };
+    group.rows.push(row);
+    grouped.set(key, group);
+  }
+
+  return [...grouped.values()]
+    .flatMap(({ creatorId, rows: creatorRows }) => {
+      const summary = summarize(creatorRows)[0];
+      return summary
+        ? [
+            {
+              creatorId,
+              currency: summary.currency,
+              creatorRevenue: summary.creatorRevenue,
+              payouts: summary.payouts,
+              balance: summary.creatorBalance,
+            },
+          ]
+        : [];
+    })
+    .sort((a, b) => a.creatorId.localeCompare(b.creatorId) || a.currency.localeCompare(b.currency));
 }
 
 /**

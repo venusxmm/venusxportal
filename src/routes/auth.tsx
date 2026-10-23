@@ -23,7 +23,8 @@ function AuthPage() {
   const [invite] = useState(() =>
     typeof window === "undefined"
       ? null
-      : new URLSearchParams(window.location.search).get("invite"),
+      : (new URLSearchParams(window.location.hash.slice(1)).get("invite") ??
+        new URLSearchParams(window.location.search).get("invite")),
   );
   const [mode, setMode] = useState<"in" | "up" | "forgot">("in");
   const [email, setEmail] = useState("");
@@ -107,7 +108,9 @@ function AuthPage() {
           email,
           password,
           options: {
-            emailRedirectTo: window.location.origin + "/dashboard",
+            emailRedirectTo:
+              window.location.origin +
+              (invite ? `/auth?invite=${encodeURIComponent(invite)}` : "/dashboard"),
             data: { full_name: name },
           },
         });

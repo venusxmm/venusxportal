@@ -13,6 +13,8 @@ export function compareScheduledTasks(
   );
 }
 
+export type ScheduledTask = { due_date: string | null; due_time: string | null };
+
 export const DEFAULT_TIME_BLOCKS: TimeBlock[] = [
   { id: "early", label: "Early morning", start: "00:00", end: "06:00" },
   { id: "morning", label: "Morning", start: "06:00", end: "12:00" },
@@ -20,6 +22,59 @@ export const DEFAULT_TIME_BLOCKS: TimeBlock[] = [
   { id: "afternoon", label: "Afternoon", start: "15:00", end: "18:00" },
   { id: "evening", label: "Evening", start: "18:00", end: "24:00" },
 ];
+
+export function sortTasksBySchedule<T extends ScheduledTask>(tasks: T[]): T[] {
+  return tasks
+    .map((task, index) => ({ task, index }))
+    .sort((a, b) => {
+      const dateOrder = compareNullable(a.task.due_date, b.task.due_date);
+      if (dateOrder) return dateOrder;
+      const timeOrder = compareNullable(
+        a.task.due_time?.slice(0, 5) ?? null,
+        b.task.due_time?.slice(0, 5) ?? null,
+      );
+      return timeOrder || a.index - b.index;
+    })
+    .map(({ task }) => task);
+}
+
+export function canChangeTaskStatus(
+  isStaff: boolean,
+  isCreator: boolean,
+  visibleToCreator: boolean,
+): boolean {
+  return isStaff || (isCreator && visibleToCreator);
+}
+
+export function addTimeBlock(blocks: TimeBlock[], id: string): TimeBlock[] {
+  return [...blocks, { id, label: "New block", start: "", end: "" }];
+}
+
+export function updateTimeBlock(
+  blocks: TimeBlock[],
+  id: string,
+  patch: Partial<TimeBlock>,
+): TimeBlock[] {
+  return blocks.map((block) => (block.id === id ? { ...block, ...patch } : block));
+}
+
+export function sortTimeBlocks(blocks: TimeBlock[]): TimeBlock[] {
+  return blocks
+    .map((block, index) => ({ block, index }))
+    .sort((a, b) => {
+      const startA = timeToMinutes(a.block.start) ?? Number.MAX_SAFE_INTEGER;
+      const startB = timeToMinutes(b.block.start) ?? Number.MAX_SAFE_INTEGER;
+      return startA - startB || a.index - b.index;
+    })
+    .map(({ block }) => block);
+}
+
+function compareNullable(a: string | null, b: string | null): number {
+  if (a === b) return 0;
+  if (a === null) return 1;
+  if (b === null) return -1;
+  return a.localeCompare(b);
+}
 
 export function timeToMinutes(value: string): number | null {
   if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value) && value !== "24:00") return null;

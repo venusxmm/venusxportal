@@ -1,7 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_AGENCY_SHARE_PCT, summarize, monthly, splitRevenue } from "./finance";
+import {
+  DEFAULT_AGENCY_SHARE_PCT,
+  summarize,
+  monthly,
+  splitRevenue,
+  summarizeCreatorBalances,
+  validateTransactionCreator,
+} from "./finance";
 
 describe("finance ledger math", () => {
+  it("requires an explicitly selected creator for payouts", () => {
+    expect(validateTransactionCreator("payout", null)).toMatch(/select the creator/i);
+    expect(validateTransactionCreator("payout", "creator-id")).toBeNull();
+    expect(validateTransactionCreator("expense", null)).toBeNull();
+  });
+
   it("never combines different currencies", () => {
     const s = summarize([
       { kind: "revenue", amount: 100, currency: "USD", occurred_on: "2026-01-01" },
@@ -26,8 +39,84 @@ describe("finance ledger math", () => {
     ])[0]!;
     expect(s.agencyRevenue).toBe(400);
     expect(s.creatorRevenue).toBe(600);
+    expect(s.creatorBalance).toBe(600);
     expect(s.netProfit).toBe(250);
     expect(s.margin).toBeCloseTo(0.625);
+  });
+
+  it("deducts each non-voided payout once from the creator balance, per currency", () => {
+    const summary = summarize([
+      {
+        kind: "revenue",
+        amount: "100.00",
+        currency: "USD",
+        occurred_on: "2026-10-01",
+        agency_share_pct: 60,
+      },
+      { kind: "payout", amount: "10.25", currency: "USD", occurred_on: "2026-10-02" },
+      {
+        kind: "payout",
+        amount: "99.00",
+        currency: "USD",
+        occurred_on: "2026-10-03",
+        archived_at: "2026-10-04T00:00:00Z",
+      },
+      { kind: "payout", amount: "5.00", currency: "EUR", occurred_on: "2026-10-03" },
+    ]);
+
+    expect(summary).toMatchObject([
+      { currency: "EUR", payouts: 5, creatorBalance: -5 },
+      { currency: "USD", payouts: 10.25, creatorRevenue: 40, creatorBalance: 29.75 },
+    ]);
+  });
+
+  it("calculates balances independently for each creator and currency", () => {
+    const balances = summarizeCreatorBalances([
+      {
+        kind: "revenue",
+        amount: 100,
+        currency: "USD",
+        occurred_on: "2026-10-01",
+        agency_share_pct: 60,
+        creator_id: "creator-a",
+      },
+      {
+        kind: "payout",
+        amount: 20,
+        currency: "USD",
+        occurred_on: "2026-10-02",
+        creator_id: "creator-a",
+      },
+      {
+        kind: "revenue",
+        amount: 100,
+        currency: "USD",
+        occurred_on: "2026-10-01",
+        agency_share_pct: 20,
+        creator_id: "creator-b",
+      },
+      {
+        kind: "payout",
+        amount: 10,
+        currency: "EUR",
+        occurred_on: "2026-10-02",
+        creator_id: "creator-b",
+      },
+      {
+        kind: "payout",
+        amount: 99,
+        currency: "USD",
+        occurred_on: "2026-10-03",
+        creator_id: "creator-a",
+        archived_at: "2026-10-04T00:00:00Z",
+      },
+    ]);
+
+    expect(balances).toEqual([
+      { creatorId: "creator-a", currency: "USD", creatorRevenue: 40, payouts: 20, balance: 20 },
+      { creatorId: "creator-b", currency: "EUR", creatorRevenue: 0, payouts: 10, balance: -10 },
+      { creatorId: "creator-b", currency: "USD", creatorRevenue: 80, payouts: 0, balance: 80 },
+    ]);
   });
 
   it("calculates the default agency share from the canonical 60 percent rule", () => {
