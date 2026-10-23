@@ -93,6 +93,17 @@ function Finance() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["transactions"] }),
     onError: (e) => toast.error((e as Error).message),
   });
+  const deleteTxn = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("transactions").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Transaction deleted");
+      qc.invalidateQueries({ queryKey: ["transactions"] });
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
 
   const filtered = useMemo(
     () =>
@@ -253,23 +264,23 @@ function Finance() {
                         )}
                         <Button
                           aria-label={
-                            t.archived_at ? `Restore ${t.category}` : `Void ${t.category}`
+                            t.archived_at ? `Restore ${t.category}` : `Delete ${t.category}`
                           }
                           title={
                             t.archived_at
                               ? "Restore transaction"
-                              : "Void transaction (retained in history)"
+                              : "Delete transaction permanently"
                           }
                           variant="ghost"
                           size="icon"
                           className={t.archived_at ? "" : "text-destructive"}
-                          onClick={() =>
-                            confirm(
-                              t.archived_at
-                                ? "Restore this entry?"
-                                : "Void this entry? It stays in history but stops counting.",
-                            ) && archive.mutate({ id: t.id, on: !t.archived_at })
-                          }
+                          onClick={() => {
+                            if (t.archived_at) {
+                              if (confirm("Restore this entry?")) archive.mutate({ id: t.id, on: false });
+                            } else if (confirm(`Permanently delete ${t.category}? This cannot be undone.`)) {
+                              deleteTxn.mutate(t.id);
+                            }
+                          }}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -305,9 +316,9 @@ function NewTxn({
   const qc = useQueryClient();
   const [open, setOpen] = useState(!!transaction);
   const init = {
-    kind: transaction?.kind ?? ("revenue" as Kind),
+    kind: transaction?.kind ?? "none",
     amount: transaction ? String(transaction.amount) : "",
-    currency: transaction?.currency ?? "USD",
+    currency: transaction?.currency ?? "none",
     occurred_on: transaction?.occurred_on ?? new Date().toISOString().slice(0, 10),
     category: transaction?.category ?? "",
     description: transaction?.description ?? "",
@@ -325,8 +336,10 @@ function NewTxn({
       if (!/^[A-Z]{3}$/.test(f.currency)) throw new Error("Currency must be a 3-letter code");
       const pct = f.agency_share_pct === "" ? null : Number(f.agency_share_pct);
       if (pct != null && (pct < 0 || pct > 100)) throw new Error("Agency % must be 0–100");
+      if (f.kind === "none") throw new Error("Select a transaction type");
+      if (f.currency === "none") throw new Error("Select a currency");
       const payload = {
-        kind: f.kind,
+        kind: f.kind as Kind,
         amount: amt,
         currency: f.currency,
         occurred_on: f.occurred_on,
@@ -380,11 +393,12 @@ function NewTxn({
         >
           <div className="space-y-1">
             <Label>Type</Label>
-            <Select value={f.kind} onValueChange={(v) => setF({ ...f, kind: v as Kind })}>
+            <Select value={f.kind} onValueChange={(v) => setF({ ...f, kind: v as Kind | "none", agency_share_pct: v === "revenue" && f.agency_share_pct === "" ? "60" : v === "revenue" ? f.agency_share_pct : "" })}>
               <SelectTrigger className="capitalize">
-                <SelectValue />
+                <SelectValue placeholder="Select type" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="none">Select type</SelectItem>
                 {(["revenue", "expense", "payout"] as Kind[]).map((k) => (
                   <SelectItem key={k} value={k} className="capitalize">
                     {k}
@@ -415,11 +429,15 @@ function NewTxn({
           </div>
           <div className="space-y-1">
             <Label>Currency</Label>
-            <Input
-              maxLength={3}
-              value={f.currency}
-              onChange={(e) => setF({ ...f, currency: e.target.value.toUpperCase() })}
-            />
+            <Select value={f.currency} onValueChange={(v) => setF({ ...f, currency: v })}>
+              <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Select currency</SelectItem>
+                <SelectItem value="USD">USD — US Dollar</SelectItem>
+                <SelectItem value="EUR">EUR — Euro</SelectItem>
+                <SelectItem value="COP">COP — Colombian Peso</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-1">
             <Label>Category</Label>

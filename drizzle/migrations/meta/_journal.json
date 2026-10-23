@@ -64,6 +64,13 @@
       "when": 1792712006000,
       "tag": "0008_creator_internal_photos",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792712007000,
+      "tag": "0009_finance_hard_delete",
+      "breakpoints": true
     }
   ]
 }
