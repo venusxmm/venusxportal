@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { CreatorAvatar } from "@/components/creator-avatar";
+import { uploadImage } from "@/lib/media";
 import { CREATOR_STATUS_LABEL, useMe } from "@/lib/me";
 import { EmptyState, ErrorNote, Loading, PageHeader, Pill } from "@/components/portal";
 import { Button } from "@/components/ui/button";
@@ -40,7 +42,7 @@ function Creators() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("creators")
-        .select("id,stage_name,email,status,archived_at,user_id,created_at")
+        .select("id,stage_name,email,status,archived_at,user_id,created_at,internal_photo_path")
         .order("stage_name");
       if (error) throw error;
       return data;
@@ -106,7 +108,10 @@ function Creators() {
               className="rounded-lg border bg-card p-5 transition hover:border-gold/50"
             >
               <div className="flex items-start justify-between gap-2">
-                <p className="text-lg font-semibold">{c.stage_name}</p>
+                <div className="flex items-center gap-3">
+                  <CreatorAvatar path={c.internal_photo_path} name={c.stage_name} size="sm" />
+                  <p className="text-lg font-semibold">{c.stage_name}</p>
+                </div>
                 <Pill value={c.status} />
               </div>
               <p className="mt-1 truncate text-sm text-muted-foreground">{c.email ?? "No email"}</p>
@@ -126,16 +131,31 @@ function NewCreator() {
   const { data: me } = useMe();
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({ stage_name: "", legal_name: "", email: "", status: "lead" });
+  const [photo, setPhoto] = useState<File | null>(null);
   const m = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("creators").insert({
-        stage_name: f.stage_name.trim(),
-        legal_name: f.legal_name.trim() || null,
-        email: f.email.trim().toLowerCase() || null,
-        status: f.status as (typeof STATUSES)[number],
-        created_by: me?.id ?? null,
-      });
+      const { data: creator, error } = await supabase
+        .from("creators")
+        .insert({
+          stage_name: f.stage_name.trim(),
+          legal_name: f.legal_name.trim() || null,
+          email: f.email.trim().toLowerCase() || null,
+          status: f.status as (typeof STATUSES)[number],
+          created_by: me?.id ?? null,
+        })
+        .select("id")
+        .single();
       if (error) throw error;
+      if (photo) {
+        const extension = photo.type.split("/")[1] === "jpeg" ? "jpg" : photo.type.split("/")[1];
+        const path = `${creator.id}/internal.${extension}`;
+        await uploadImage("creator-photos", path, photo);
+        const { error: photoError } = await supabase
+          .from("creators")
+          .update({ internal_photo_path: path })
+          .eq("id", creator.id);
+        if (photoError) throw photoError;
+      }
     },
     onSuccess: () => {
       toast.success(
@@ -145,6 +165,7 @@ function NewCreator() {
       qc.invalidateQueries({ queryKey: ["tasks"] });
       setOpen(false);
       setF({ stage_name: "", legal_name: "", email: "", status: "lead" });
+      setPhoto(null);
     },
     onError: (e) => toast.error((e as Error).message),
   });
@@ -164,6 +185,17 @@ function NewCreator() {
             m.mutate();
           }}
         >
+          <div className="space-y-1">
+            <Label>Internal creator photo</Label>
+            <Input
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              onChange={(e) => setPhoto(e.target.files?.[0] ?? null)}
+            />
+            <p className="text-xs text-muted-foreground">
+              For VenusX staff identification only · 5 MB maximum
+            </p>
+          </div>
           <div className="space-y-1">
             <Label>Stage name</Label>
             <Input

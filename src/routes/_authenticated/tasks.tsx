@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
@@ -111,6 +112,17 @@ function Tasks() {
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks"] }),
     onError: (e) => toast.error((e as Error).message),
+  });
+  const deleteTask = useMutation({
+    mutationFn: async (task: Task) => {
+      const { error } = await supabase.from("tasks").delete().eq("id", task.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Task deleted");
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+    },
+    onError: (error) => toast.error((error as Error).message),
   });
 
   const rows = useMemo(
@@ -233,6 +245,7 @@ function Tasks() {
                 <th className="p-3">Priority</th>
                 <th className="p-3">Status</th>
                 <th className="p-3">Due</th>
+                <th className="p-3" />
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -278,6 +291,30 @@ function Tasks() {
                   >
                     {t.due_date ?? "—"}
                     {t.due_time ? ` · ${t.due_time.slice(0, 5)}` : ""}
+                  </td>
+                  <td className="p-3 text-right whitespace-nowrap">
+                    <Button
+                      aria-label={`Edit ${t.title}`}
+                      title="Edit task"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setEditing(t)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      aria-label={`Delete ${t.title}`}
+                      title="Delete task"
+                      variant="ghost"
+                      size="icon"
+                      className="text-destructive"
+                      disabled={deleteTask.isPending}
+                      onClick={() =>
+                        window.confirm(`Permanently delete “${t.title}”?`) && deleteTask.mutate(t)
+                      }
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </td>
                 </tr>
               ))}

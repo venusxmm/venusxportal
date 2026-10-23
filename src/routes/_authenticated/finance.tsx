@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
@@ -240,12 +241,28 @@ function Finance() {
                       </td>
                       <td className="p-3 text-right">
                         {!t.archived_at && (
-                          <Button variant="ghost" size="sm" onClick={() => setEditing(t)}>
-                            Edit
+                          <Button
+                            aria-label={`Edit ${t.category}`}
+                            title="Edit transaction"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setEditing(t)}
+                          >
+                            <Pencil className="h-4 w-4" />
                           </Button>
                         )}
-                        <button
-                          className="text-xs text-muted-foreground hover:text-gold"
+                        <Button
+                          aria-label={
+                            t.archived_at ? `Restore ${t.category}` : `Void ${t.category}`
+                          }
+                          title={
+                            t.archived_at
+                              ? "Restore transaction"
+                              : "Void transaction (retained in history)"
+                          }
+                          variant="ghost"
+                          size="icon"
+                          className={t.archived_at ? "" : "text-destructive"}
                           onClick={() =>
                             confirm(
                               t.archived_at
@@ -254,8 +271,8 @@ function Finance() {
                             ) && archive.mutate({ id: t.id, on: !t.archived_at })
                           }
                         >
-                          {t.archived_at ? "Restore" : "Void"}
-                        </button>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </td>
                     </tr>
                   ))}

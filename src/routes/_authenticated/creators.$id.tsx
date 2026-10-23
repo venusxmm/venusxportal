@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { CreatorAvatar } from "@/components/creator-avatar";
+import { uploadImage } from "@/lib/media";
 import type { Database } from "@/integrations/supabase/types";
 import {
   AREA_LABEL,
@@ -63,6 +65,7 @@ function CreatorPage() {
       return data;
     },
   });
+  const [photoBusy, setPhotoBusy] = useState(false);
   const tasks = useQuery({
     queryKey: ["tasks", "creator", id],
     queryFn: async () => {
@@ -128,6 +131,26 @@ function CreatorPage() {
           : (e as Error).message,
       ),
   });
+  const replacePhoto = async (file: File) => {
+    setPhotoBusy(true);
+    try {
+      const extension = file.type.split("/")[1] === "jpeg" ? "jpg" : file.type.split("/")[1];
+      const path = `${id}/internal.${extension}`;
+      await uploadImage("creator-photos", path, file);
+      const { error } = await supabase
+        .from("creators")
+        .update({ internal_photo_path: path })
+        .eq("id", id);
+      if (error) throw error;
+      toast.success("Internal creator photo updated");
+      await c.refetch();
+      qc.invalidateQueries({ queryKey: ["creators", "list"] });
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
 
   if (c.isLoading) return <Loading />;
   if (c.error) return <ErrorNote error={c.error} />;

@@ -78,6 +78,7 @@ export type Database = {
           email: string | null;
           id: string;
           internal_notes: string | null;
+          internal_photo_path: string | null;
           legal_name: string | null;
           objectives: string | null;
           positioning: string | null;
@@ -94,6 +95,7 @@ export type Database = {
           email?: string | null;
           id?: string;
           internal_notes?: string | null;
+          internal_photo_path?: string | null;
           legal_name?: string | null;
           objectives?: string | null;
           positioning?: string | null;
@@ -110,6 +112,7 @@ export type Database = {
           email?: string | null;
           id?: string;
           internal_notes?: string | null;
+          internal_photo_path?: string | null;
           legal_name?: string | null;
           objectives?: string | null;
           positioning?: string | null;

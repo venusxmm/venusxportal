@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { Copy } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { AREA_LABEL, AREA_ORDER, useMe, type AppRole, type WorkArea } from "@/lib/me";
@@ -33,7 +34,10 @@ function Team() {
     queryKey: ["team"],
     queryFn: async () => {
       const [p, r, a] = await Promise.all([
-        supabase.from("profiles").select("id,full_name,email,created_at").order("created_at"),
+        supabase
+          .from("profiles")
+          .select("id,full_name,nickname,avatar_url,email,created_at")
+          .order("created_at"),
         supabase.from("user_roles").select("user_id,role"),
         supabase.from("user_areas").select("user_id,area"),
       ]);
@@ -155,8 +159,26 @@ function Team() {
               return (
                 <tr key={p.id}>
                   <td className="p-3">
-                    <p className="font-medium">{p.full_name || "—"}</p>
-                    <p className="text-xs text-muted-foreground">{p.email}</p>
+                    <div className="flex items-center gap-3">
+                      {p.avatar_url ? (
+                        <img
+                          src={p.avatar_url}
+                          alt=""
+                          className="h-9 w-9 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gold-soft text-gold">
+                          {(p.nickname || p.full_name || p.email || "?").slice(0, 1).toUpperCase()}
+                        </div>
+                      )}
+                      <div>
+                        <p className="font-medium">{p.nickname || p.full_name || "—"}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {p.full_name && p.nickname ? `${p.full_name} · ` : ""}
+                          {p.email}
+                        </p>
+                      </div>
+                    </div>
                   </td>
                   {ROLES.map((r) => (
                     <td key={r} className="p-3">
@@ -255,6 +277,7 @@ function InvitationPanel({
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<AppRole>("employee");
   const [busy, setBusy] = useState(false);
+  const [recentLinks, setRecentLinks] = useState<Record<string, string>>({});
   const create = async () => {
     if (!email.trim()) return;
     setBusy(true);
@@ -268,7 +291,12 @@ function InvitationPanel({
       });
       if (error) throw error;
       await navigator.clipboard.writeText(`${window.location.origin}/auth?invite=${token}`);
-      toast.success("Invitation created and link copied");
+      if (data && typeof data === "object" && "id" in data)
+        setRecentLinks((links) => ({
+          ...links,
+          [String(data["id"])]: `${window.location.origin}/auth?invite=${token}`,
+        }));
+      toast.success("Invitation created and link copied. Email delivery was not attempted.");
       setEmail("");
       onChanged();
       void data;
@@ -339,6 +367,25 @@ function InvitationPanel({
                   expires {new Date(item.expires_at).toLocaleDateString()}
                 </span>
               </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={!recentLinks[item.id]}
+                title={
+                  recentLinks[item.id]
+                    ? "Copy invitation link"
+                    : "The link is only available immediately after creation"
+                }
+                onClick={() => {
+                  const link = recentLinks[item.id];
+                  if (link)
+                    void navigator.clipboard
+                      .writeText(link)
+                      .then(() => toast.success("Invitation link copied"));
+                }}
+              >
+                <Copy className="mr-1 h-4 w-4" /> Copy link
+              </Button>
               <Button
                 variant="ghost"
                 size="sm"
