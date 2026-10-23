@@ -2,7 +2,15 @@ import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
-export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: ReactNode }) {
+export function PageHeader({
+  title,
+  subtitle,
+  actions,
+}: {
+  title: string;
+  subtitle?: string;
+  actions?: ReactNode;
+}) {
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
       <div>
@@ -14,7 +22,15 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
   );
 }
 
-export function EmptyState({ title, body, action }: { title: string; body?: string; action?: ReactNode }) {
+export function EmptyState({
+  title,
+  body,
+  action,
+}: {
+  title: string;
+  body?: string;
+  action?: ReactNode;
+}) {
   return (
     <div className="rounded-lg border border-dashed p-10 text-center">
       <p className="font-medium">{title}</p>
@@ -24,7 +40,15 @@ export function EmptyState({ title, body, action }: { title: string; body?: stri
   );
 }
 
-export function Stat({ label, value, hint }: { label: string; value: ReactNode; hint?: string | undefined }) {
+export function Stat({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: ReactNode;
+  hint?: string | undefined;
+}) {
   return (
     <div className="rounded-lg border bg-card p-5">
       <p className="text-xs uppercase tracking-widest text-muted-foreground">{label}</p>
@@ -66,8 +90,11 @@ const tone: Record<string, string> = {
 
 export function Pill({ value, label }: { value: string; label?: string | undefined }) {
   return (
-    <Badge variant="outline" className={cn("text-[10px] font-medium uppercase tracking-wider", tone[value])}>
-      {label ?? value.replace(/_/g, " ")}
+    <Badge
+      variant="outline"
+      className={cn("text-[10px] font-medium uppercase tracking-wider", tone[value])}
+    >
+      {label ?? value.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase())}
     </Badge>
   );
 }

@@ -25,14 +25,18 @@ export const meQuery = queryOptions({
     const [roles, areas, profile, creator] = await Promise.all([
       supabase.from("user_roles").select("role").eq("user_id", u.user.id),
       supabase.from("user_areas").select("area").eq("user_id", u.user.id),
-      supabase.from("profiles").select("full_name").eq("id", u.user.id).maybeSingle(),
+      supabase
+        .from("profiles")
+        .select("full_name,nickname,avatar_url")
+        .eq("id", u.user.id)
+        .maybeSingle(),
       supabase.from("creators").select("id").eq("user_id", u.user.id).maybeSingle(),
     ]);
     const r = (roles.data ?? []).map((x) => x.role);
     return {
       id: u.user.id,
       email: u.user.email ?? null,
-      name: profile.data?.full_name ?? null,
+      name: profile.data?.nickname ?? profile.data?.full_name ?? null,
       roles: r,
       areas: (areas.data ?? []).map((x) => x.area),
       creatorId: creator.data?.id ?? null,
@@ -46,7 +50,14 @@ export const meQuery = queryOptions({
 export const useMe = () => useQuery(meQuery);
 
 /** Employee areas shown in Team & Access, in display order. "sharing" is retired and hidden. */
-export const AREA_ORDER = ["creator_manager", "creator_management", "marketing", "chatting", "operations", "admin"] as const;
+export const AREA_ORDER = [
+  "creator_manager",
+  "creator_management",
+  "marketing",
+  "chatting",
+  "operations",
+  "admin",
+] as const;
 export const AREA_LABEL: Record<WorkArea, string> = {
   creator_manager: "Creator Manager",
   creator_management: "Creator Management",
@@ -63,4 +74,12 @@ export const TASK_STATUS_LABEL = {
   blocked: "Blocked",
   review: "In review",
   done: "Done",
+} as const;
+
+export const CREATOR_STATUS_LABEL = {
+  lead: "Lead",
+  onboarding: "Onboarding",
+  active: "Active",
+  paused: "Paused",
+  offboarded: "Offboarded",
 } as const;

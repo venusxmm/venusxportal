@@ -40,4 +40,21 @@ describe("finance ledger math", () => {
     );
     expect(m.map((x) => [x.month, x.revenue])).toEqual([["2026-01", 10], ["2026-02", 20]]);
   });
+
+  it("ignores archived rows in monthly totals and tolerates invalid agency share values", () => {
+    const m = monthly(
+      [
+        { kind: "revenue", amount: 10, currency: "USD", occurred_on: "2026-01-05" },
+        { kind: "revenue", amount: 25, currency: "USD", occurred_on: "2026-01-10", archived_at: "x" },
+        { kind: "revenue", amount: 42, currency: "USD", occurred_on: "2026-02-05", agency_share_pct: "invalid" },
+      ],
+      "USD",
+    );
+    expect(m.map((x) => [x.month, x.revenue])).toEqual([["2026-01", 10], ["2026-02", 42]]);
+    expect(summarize([{ kind: "revenue", amount: "0.50", currency: "USD", occurred_on: "2026-03-01", agency_share_pct: "invalid" }])[0]).toMatchObject({
+      revenue: 0.5,
+      agencyRevenue: 0.5,
+      creatorRevenue: 0,
+    });
+  });
 });

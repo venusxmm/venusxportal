@@ -25,6 +25,11 @@ export interface CurrencySummary {
 }
 
 const cents = (n: number | string) => Math.round(Number(n) * 100);
+const parseAgencyShare = (value: number | string | null | undefined) => {
+  if (value == null || value === "") return 100;
+  const pct = Number(value);
+  return Number.isFinite(pct) && pct >= 0 && pct <= 100 ? pct : 100;
+};
 
 /**
  * Single source of truth for ledger math. Never mixes currencies:
@@ -34,12 +39,15 @@ export function summarize(rows: LedgerRow[]): CurrencySummary[] {
   const map = new Map<string, { rev: number; exp: number; pay: number; agency: number }>();
   for (const r of rows) {
     if (r.archived_at) continue;
-    const cur = r.currency.toUpperCase();
+    const cur = String(r.currency ?? "").toUpperCase();
+    if (!cur) continue;
+    const amount = Number(r.amount);
+    if (!Number.isFinite(amount)) continue;
     const acc = map.get(cur) ?? { rev: 0, exp: 0, pay: 0, agency: 0 };
-    const c = cents(r.amount);
+    const c = cents(amount);
     if (r.kind === "revenue") {
       acc.rev += c;
-      const pct = r.agency_share_pct == null || r.agency_share_pct === "" ? 100 : Number(r.agency_share_pct);
+      const pct = parseAgencyShare(r.agency_share_pct);
       acc.agency += Math.round((c * pct) / 100);
     } else if (r.kind === "expense") acc.exp += c;
     else acc.pay += c;
@@ -68,8 +76,10 @@ export function inRange<T extends LedgerRow>(rows: T[], from?: string, to?: stri
 
 export function monthly(rows: LedgerRow[], currency: string) {
   const months = new Map<string, LedgerRow[]>();
+  const targetCurrency = currency.toUpperCase();
   for (const r of rows) {
-    if (r.currency.toUpperCase() !== currency) continue;
+    if (r.archived_at) continue;
+    if (String(r.currency ?? "").toUpperCase() !== targetCurrency) continue;
     const m = r.occurred_on.slice(0, 7);
     months.set(m, [...(months.get(m) ?? []), r]);
   }

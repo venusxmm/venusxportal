@@ -3,13 +3,25 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { useMe } from "@/lib/me";
+import { CREATOR_STATUS_LABEL, useMe } from "@/lib/me";
 import { EmptyState, ErrorNote, Loading, PageHeader, Pill } from "@/components/portal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const STATUSES = ["lead", "onboarding", "active", "paused", "offboarded"] as const;
 
@@ -44,32 +56,63 @@ function Creators() {
 
   return (
     <div>
-      <PageHeader title="Creators" subtitle="One profile per creator, shared across every module." actions={canCreate && <NewCreator />} />
+      <PageHeader
+        title="Creators"
+        subtitle="One profile per creator, shared across every module."
+        actions={canCreate && <NewCreator />}
+      />
       <div className="mb-4 flex flex-wrap gap-2">
-        <Input placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} className="max-w-xs" />
+        <Input
+          placeholder="Search…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          className="max-w-xs"
+        />
         <Select value={status} onValueChange={setStatus}>
-          <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-40">
+            <SelectValue />
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All statuses</SelectItem>
-            {STATUSES.map((s) => <SelectItem key={s} value={s} className="uppercase tracking-wider">{s}</SelectItem>)}
+            {STATUSES.map((s) => (
+              <SelectItem key={s} value={s}>
+                {CREATOR_STATUS_LABEL[s]}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
         <Button variant="ghost" onClick={() => setShowArchived(!showArchived)}>
           {showArchived ? "Show current" : "Show archived"}
         </Button>
       </div>
-      {list.isLoading ? <Loading /> : list.error ? <ErrorNote error={list.error} retry={() => list.refetch()} /> : rows.length === 0 ? (
-        <EmptyState title="No creators found" body={canCreate ? "Add your first creator to start." : "No creators are assigned to you yet."} />
+      {list.isLoading ? (
+        <Loading />
+      ) : list.error ? (
+        <ErrorNote error={list.error} retry={() => list.refetch()} />
+      ) : rows.length === 0 ? (
+        <EmptyState
+          title="No creators found"
+          body={
+            canCreate ? "Add your first creator to start." : "No creators are assigned to you yet."
+          }
+        />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {rows.map((c) => (
-            <Link key={c.id} to="/creators/$id" params={{ id: c.id }} className="rounded-lg border bg-card p-5 transition hover:border-gold/50">
+            <Link
+              key={c.id}
+              to="/creators/$id"
+              params={{ id: c.id }}
+              className="rounded-lg border bg-card p-5 transition hover:border-gold/50"
+            >
               <div className="flex items-start justify-between gap-2">
                 <p className="text-lg font-semibold">{c.stage_name}</p>
                 <Pill value={c.status} />
               </div>
               <p className="mt-1 truncate text-sm text-muted-foreground">{c.email ?? "No email"}</p>
-              <p className="mt-3 text-xs text-muted-foreground">{c.user_id ? "Portal account linked" : "No portal account yet"}</p>
+              <p className="mt-3 text-xs text-muted-foreground">
+                {c.user_id ? "Portal account linked" : "No portal account yet"}
+              </p>
             </Link>
           ))}
         </div>
@@ -95,7 +138,9 @@ function NewCreator() {
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success(f.status === "onboarding" ? "Creator added — onboarding tasks created." : "Creator added.");
+      toast.success(
+        f.status === "onboarding" ? "Creator added — onboarding tasks created." : "Creator added.",
+      );
       qc.invalidateQueries({ queryKey: ["creators"] });
       qc.invalidateQueries({ queryKey: ["tasks"] });
       setOpen(false);
@@ -105,25 +150,65 @@ function NewCreator() {
   });
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild><Button>New creator</Button></DialogTrigger>
+      <DialogTrigger asChild>
+        <Button>New creator</Button>
+      </DialogTrigger>
       <DialogContent>
-        <DialogHeader><DialogTitle>New creator</DialogTitle></DialogHeader>
-        <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); m.mutate(); }}>
-          <div className="space-y-1"><Label>Stage name</Label><Input required maxLength={120} value={f.stage_name} onChange={(e) => setF({ ...f, stage_name: e.target.value })} /></div>
-          <div className="space-y-1"><Label>Legal name</Label><Input value={f.legal_name} onChange={(e) => setF({ ...f, legal_name: e.target.value })} /></div>
+        <DialogHeader>
+          <DialogTitle>New creator</DialogTitle>
+        </DialogHeader>
+        <form
+          className="space-y-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            m.mutate();
+          }}
+        >
+          <div className="space-y-1">
+            <Label>Stage name</Label>
+            <Input
+              required
+              maxLength={120}
+              value={f.stage_name}
+              onChange={(e) => setF({ ...f, stage_name: e.target.value })}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label>Legal name</Label>
+            <Input
+              value={f.legal_name}
+              onChange={(e) => setF({ ...f, legal_name: e.target.value })}
+            />
+          </div>
           <div className="space-y-1">
             <Label>Email</Label>
-            <Input type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
-            <p className="text-xs text-muted-foreground">When the creator signs up with this email, their portal is linked automatically.</p>
+            <Input
+              type="email"
+              value={f.email}
+              onChange={(e) => setF({ ...f, email: e.target.value })}
+            />
+            <p className="text-xs text-muted-foreground">
+              When the creator signs up with this email, their portal is linked automatically.
+            </p>
           </div>
           <div className="space-y-1">
             <Label>Status</Label>
             <Select value={f.status} onValueChange={(v) => setF({ ...f, status: v })}>
-              <SelectTrigger className="uppercase tracking-wider"><SelectValue /></SelectTrigger>
-              <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s} className="uppercase tracking-wider">{s}</SelectItem>)}</SelectContent>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {STATUSES.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {CREATOR_STATUS_LABEL[s]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
             </Select>
           </div>
-          <Button className="w-full" disabled={m.isPending}>Create</Button>
+          <Button className="w-full" disabled={m.isPending}>
+            Create
+          </Button>
         </form>
       </DialogContent>
     </Dialog>

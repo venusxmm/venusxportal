@@ -17,6 +17,7 @@ import { Route as AuthenticatedAuditRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedFinanceRouteImport } from './routes/_authenticated/finance'
 import { Route as AuthenticatedPortalRouteImport } from './routes/_authenticated/portal'
+import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedTasksRouteImport } from './routes/_authenticated/tasks'
 import { Route as AuthenticatedTeamRouteImport } from './routes/_authenticated/team'
 import { Route as AuthenticatedCreatorsIndexRouteImport } from './routes/_authenticated/creators.index'
@@ -61,6 +62,11 @@ const AuthenticatedPortalRoute = AuthenticatedPortalRouteImport.update({
   path: '/portal',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedTasksRoute = AuthenticatedTasksRouteImport.update({
   id: '/tasks',
   path: '/tasks',
@@ -91,6 +97,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/finance': typeof AuthenticatedFinanceRoute
   '/portal': typeof AuthenticatedPortalRoute
+  '/settings': typeof AuthenticatedSettingsRoute
   '/tasks': typeof AuthenticatedTasksRoute
   '/team': typeof AuthenticatedTeamRoute
   '/creators/$id': typeof AuthenticatedCreatorsIdRoute
@@ -104,6 +111,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/finance': typeof AuthenticatedFinanceRoute
   '/portal': typeof AuthenticatedPortalRoute
+  '/settings': typeof AuthenticatedSettingsRoute
   '/tasks': typeof AuthenticatedTasksRoute
   '/team': typeof AuthenticatedTeamRoute
   '/creators/$id': typeof AuthenticatedCreatorsIdRoute
@@ -119,6 +127,7 @@ export interface FileRoutesById {
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/finance': typeof AuthenticatedFinanceRoute
   '/_authenticated/portal': typeof AuthenticatedPortalRoute
+  '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/tasks': typeof AuthenticatedTasksRoute
   '/_authenticated/team': typeof AuthenticatedTeamRoute
   '/_authenticated/creators/$id': typeof AuthenticatedCreatorsIdRoute
@@ -134,6 +143,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/finance'
     | '/portal'
+    | '/settings'
     | '/tasks'
     | '/team'
     | '/creators/$id'
@@ -147,6 +157,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/finance'
     | '/portal'
+    | '/settings'
     | '/tasks'
     | '/team'
     | '/creators/$id'
@@ -161,6 +172,7 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard'
     | '/_authenticated/finance'
     | '/_authenticated/portal'
+    | '/_authenticated/settings'
     | '/_authenticated/tasks'
     | '/_authenticated/team'
     | '/_authenticated/creators/$id'
@@ -232,6 +244,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPortalRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/settings': {
+      id: '/_authenticated/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AuthenticatedSettingsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/tasks': {
       id: '/_authenticated/tasks'
       path: '/tasks'
@@ -268,6 +287,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedFinanceRoute: typeof AuthenticatedFinanceRoute
   AuthenticatedPortalRoute: typeof AuthenticatedPortalRoute
+  AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedTasksRoute: typeof AuthenticatedTasksRoute
   AuthenticatedTeamRoute: typeof AuthenticatedTeamRoute
   AuthenticatedCreatorsIdRoute: typeof AuthenticatedCreatorsIdRoute
@@ -279,6 +299,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedFinanceRoute: AuthenticatedFinanceRoute,
   AuthenticatedPortalRoute: AuthenticatedPortalRoute,
+  AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedTasksRoute: AuthenticatedTasksRoute,
   AuthenticatedTeamRoute: AuthenticatedTeamRoute,
   AuthenticatedCreatorsIdRoute: AuthenticatedCreatorsIdRoute,

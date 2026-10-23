@@ -1,18 +1,21 @@
 import { createFileRoute, Link, Outlet, redirect, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Menu, X } from "lucide-react";
+import { Menu, Settings, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useMe, type Me } from "@/lib/me";
 import { Loading } from "@/components/portal";
 import logo from "@/assets/venusx-logo.jpeg.asset.json";
 import { cn } from "@/lib/utils";
+import { APP_VERSION_LABEL } from "@/lib/version";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
   beforeLoad: async () => {
-    const { data } = await supabase.auth.getUser();
-    if (!data.user) throw redirect({ to: "/auth" });
+    const { data: sessionData, error } = await supabase.auth.getSession();
+    if (error || !sessionData.session) {
+      throw redirect({ to: "/auth" });
+    }
   },
   component: Shell,
 });
@@ -89,11 +92,21 @@ function Shell() {
         </div>
         {nav}
         <div className="absolute inset-x-4 bottom-4 border-t border-sidebar-border pt-4 text-sm">
-          <p className="truncate font-medium">{me.name ?? me.email}</p>
-          <p className="truncate text-xs capitalize text-muted-foreground">{me.roles.join(", ") || "No role yet"}</p>
-          <button onClick={signOut} className="mt-2 text-xs text-muted-foreground hover:text-gold">
-            Sign out
-          </button>
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-medium">{me.name ?? me.email}</p>
+              <p className="truncate text-xs capitalize text-muted-foreground">{me.roles.join(", ") || "No role yet"}</p>
+            </div>
+            <Link to="/settings" className="rounded-md border border-sidebar-border p-1.5 text-muted-foreground transition-colors hover:border-gold/70 hover:text-gold" aria-label="Open settings">
+              <Settings className="h-4 w-4" />
+            </Link>
+          </div>
+          <div className="mt-3 flex items-center justify-between gap-2">
+            <button onClick={signOut} className="text-xs text-muted-foreground hover:text-gold">
+              Sign out
+            </button>
+            <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">{APP_VERSION_LABEL}</span>
+          </div>
         </div>
       </aside>
       {open && <div className="fixed inset-0 z-30 bg-background/70 md:hidden" onClick={() => setOpen(false)} />}
