@@ -1,532 +1,526 @@
-export type Json =
-  | string
-  | number
-  | boolean
-  | null
-  | { [key: string]: Json | undefined }
-  | Json[]
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.18"
-  }
+    PostgrestVersion: "14.18";
+  };
   public: {
     Tables: {
       audit_events: {
         Row: {
-          action: string
-          actor_id: string | null
-          created_at: string
-          details: Json | null
-          entity: string
-          entity_id: string | null
-          id: string
-        }
+          action: string;
+          actor_id: string | null;
+          created_at: string;
+          details: Json | null;
+          entity: string;
+          entity_id: string | null;
+          id: string;
+        };
         Insert: {
-          action: string
-          actor_id?: string | null
-          created_at?: string
-          details?: Json | null
-          entity: string
-          entity_id?: string | null
-          id?: string
-        }
+          action: string;
+          actor_id?: string | null;
+          created_at?: string;
+          details?: Json | null;
+          entity: string;
+          entity_id?: string | null;
+          id?: string;
+        };
         Update: {
-          action?: string
-          actor_id?: string | null
-          created_at?: string
-          details?: Json | null
-          entity?: string
-          entity_id?: string | null
-          id?: string
-        }
-        Relationships: []
-      }
+          action?: string;
+          actor_id?: string | null;
+          created_at?: string;
+          details?: Json | null;
+          entity?: string;
+          entity_id?: string | null;
+          id?: string;
+        };
+        Relationships: [];
+      };
       creator_assignments: {
         Row: {
-          area: Database["public"]["Enums"]["work_area"]
-          created_at: string
-          creator_id: string
-          id: string
-          user_id: string
-        }
+          area: Database["public"]["Enums"]["work_area"];
+          created_at: string;
+          creator_id: string;
+          id: string;
+          user_id: string;
+        };
         Insert: {
-          area: Database["public"]["Enums"]["work_area"]
-          created_at?: string
-          creator_id: string
-          id?: string
-          user_id: string
-        }
+          area: Database["public"]["Enums"]["work_area"];
+          created_at?: string;
+          creator_id: string;
+          id?: string;
+          user_id: string;
+        };
         Update: {
-          area?: Database["public"]["Enums"]["work_area"]
-          created_at?: string
-          creator_id?: string
-          id?: string
-          user_id?: string
-        }
+          area?: Database["public"]["Enums"]["work_area"];
+          created_at?: string;
+          creator_id?: string;
+          id?: string;
+          user_id?: string;
+        };
         Relationships: [
           {
-            foreignKeyName: "creator_assignments_creator_id_fkey"
-            columns: ["creator_id"]
-            isOneToOne: false
-            referencedRelation: "creators"
-            referencedColumns: ["id"]
+            foreignKeyName: "creator_assignments_creator_id_fkey";
+            columns: ["creator_id"];
+            isOneToOne: false;
+            referencedRelation: "creators";
+            referencedColumns: ["id"];
           },
-        ]
-      }
+        ];
+      };
       creator_private_details: {
         Row: {
-          creator_id: string
-          internal_notes: string | null
-          internal_photo_path: string | null
-        }
+          creator_id: string;
+          internal_notes: string | null;
+          internal_photo_path: string | null;
+        };
         Insert: {
-          creator_id: string
-          internal_notes?: string | null
-          internal_photo_path?: string | null
-        }
+          creator_id: string;
+          internal_notes?: string | null;
+          internal_photo_path?: string | null;
+        };
         Update: {
-          creator_id?: string
-          internal_notes?: string | null
-          internal_photo_path?: string | null
-        }
+          creator_id?: string;
+          internal_notes?: string | null;
+          internal_photo_path?: string | null;
+        };
         Relationships: [
           {
-            foreignKeyName: "creator_private_details_creator_id_fkey"
-            columns: ["creator_id"]
-            isOneToOne: true
-            referencedRelation: "creators"
-            referencedColumns: ["id"]
+            foreignKeyName: "creator_private_details_creator_id_fkey";
+            columns: ["creator_id"];
+            isOneToOne: true;
+            referencedRelation: "creators";
+            referencedColumns: ["id"];
           },
-        ]
-      }
+        ];
+      };
       creators: {
         Row: {
-          archived_at: string | null
-          created_at: string
-          created_by: string | null
-          email: string | null
-          id: string
-          legal_name: string | null
-          objectives: string | null
-          positioning: string | null
-          social_links: Json
-          stage_name: string
-          status: Database["public"]["Enums"]["creator_status"]
-          updated_at: string
-          user_id: string | null
-        }
+          archived_at: string | null;
+          created_at: string;
+          created_by: string | null;
+          email: string | null;
+          id: string;
+          legal_name: string | null;
+          objectives: string | null;
+          positioning: string | null;
+          social_links: Json;
+          stage_name: string;
+          status: Database["public"]["Enums"]["creator_status"];
+          updated_at: string;
+          user_id: string | null;
+        };
         Insert: {
-          archived_at?: string | null
-          created_at?: string
-          created_by?: string | null
-          email?: string | null
-          id?: string
-          legal_name?: string | null
-          objectives?: string | null
-          positioning?: string | null
-          social_links?: Json
-          stage_name: string
-          status?: Database["public"]["Enums"]["creator_status"]
-          updated_at?: string
-          user_id?: string | null
-        }
+          archived_at?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          email?: string | null;
+          id?: string;
+          legal_name?: string | null;
+          objectives?: string | null;
+          positioning?: string | null;
+          social_links?: Json;
+          stage_name: string;
+          status?: Database["public"]["Enums"]["creator_status"];
+          updated_at?: string;
+          user_id?: string | null;
+        };
         Update: {
-          archived_at?: string | null
-          created_at?: string
-          created_by?: string | null
-          email?: string | null
-          id?: string
-          legal_name?: string | null
-          objectives?: string | null
-          positioning?: string | null
-          social_links?: Json
-          stage_name?: string
-          status?: Database["public"]["Enums"]["creator_status"]
-          updated_at?: string
-          user_id?: string | null
-        }
-        Relationships: []
-      }
+          archived_at?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          email?: string | null;
+          id?: string;
+          legal_name?: string | null;
+          objectives?: string | null;
+          positioning?: string | null;
+          social_links?: Json;
+          stage_name?: string;
+          status?: Database["public"]["Enums"]["creator_status"];
+          updated_at?: string;
+          user_id?: string | null;
+        };
+        Relationships: [];
+      };
       invitations: {
         Row: {
-          accepted_at: string | null
-          areas: Database["public"]["Enums"]["work_area"][]
-          created_at: string
-          created_by: string
-          email: string
-          expires_at: string
-          id: string
-          revoked_at: string | null
-          role: Database["public"]["Enums"]["app_role"]
-          token_hash: string
-        }
+          accepted_at: string | null;
+          areas: Database["public"]["Enums"]["work_area"][];
+          created_at: string;
+          created_by: string;
+          email: string;
+          expires_at: string;
+          id: string;
+          revoked_at: string | null;
+          role: Database["public"]["Enums"]["app_role"];
+          token_hash: string;
+        };
         Insert: {
-          accepted_at?: string | null
-          areas?: Database["public"]["Enums"]["work_area"][]
-          created_at?: string
-          created_by?: string
-          email: string
-          expires_at?: string
-          id?: string
-          revoked_at?: string | null
-          role: Database["public"]["Enums"]["app_role"]
-          token_hash: string
-        }
+          accepted_at?: string | null;
+          areas?: Database["public"]["Enums"]["work_area"][];
+          created_at?: string;
+          created_by?: string;
+          email: string;
+          expires_at?: string;
+          id?: string;
+          revoked_at?: string | null;
+          role: Database["public"]["Enums"]["app_role"];
+          token_hash: string;
+        };
         Update: {
-          accepted_at?: string | null
-          areas?: Database["public"]["Enums"]["work_area"][]
-          created_at?: string
-          created_by?: string
-          email?: string
-          expires_at?: string
-          id?: string
-          revoked_at?: string | null
-          role?: Database["public"]["Enums"]["app_role"]
-          token_hash?: string
-        }
-        Relationships: []
-      }
+          accepted_at?: string | null;
+          areas?: Database["public"]["Enums"]["work_area"][];
+          created_at?: string;
+          created_by?: string;
+          email?: string;
+          expires_at?: string;
+          id?: string;
+          revoked_at?: string | null;
+          role?: Database["public"]["Enums"]["app_role"];
+          token_hash?: string;
+        };
+        Relationships: [];
+      };
       notifications: {
         Row: {
-          body: string | null
-          created_at: string
-          dedupe_key: string | null
-          id: string
-          link: string | null
-          read_at: string | null
-          title: string
-          user_id: string
-        }
+          body: string | null;
+          created_at: string;
+          dedupe_key: string | null;
+          id: string;
+          link: string | null;
+          read_at: string | null;
+          title: string;
+          user_id: string;
+        };
         Insert: {
-          body?: string | null
-          created_at?: string
-          dedupe_key?: string | null
-          id?: string
-          link?: string | null
-          read_at?: string | null
-          title: string
-          user_id: string
-        }
+          body?: string | null;
+          created_at?: string;
+          dedupe_key?: string | null;
+          id?: string;
+          link?: string | null;
+          read_at?: string | null;
+          title: string;
+          user_id: string;
+        };
         Update: {
-          body?: string | null
-          created_at?: string
-          dedupe_key?: string | null
-          id?: string
-          link?: string | null
-          read_at?: string | null
-          title?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
+          body?: string | null;
+          created_at?: string;
+          dedupe_key?: string | null;
+          id?: string;
+          link?: string | null;
+          read_at?: string | null;
+          title?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       profiles: {
         Row: {
-          access_revoked_at: string | null
-          availability: string | null
-          avatar_url: string | null
-          created_at: string
-          description: string | null
-          email: string | null
-          full_name: string | null
-          id: string
-          membership_removed_at: string | null
-          nickname: string | null
-          title: string | null
-          updated_at: string
-        }
+          access_revoked_at: string | null;
+          availability: string | null;
+          avatar_url: string | null;
+          created_at: string;
+          description: string | null;
+          email: string | null;
+          full_name: string | null;
+          id: string;
+          membership_removed_at: string | null;
+          nickname: string | null;
+          title: string | null;
+          updated_at: string;
+        };
         Insert: {
-          access_revoked_at?: string | null
-          availability?: string | null
-          avatar_url?: string | null
-          created_at?: string
-          description?: string | null
-          email?: string | null
-          full_name?: string | null
-          id: string
-          membership_removed_at?: string | null
-          nickname?: string | null
-          title?: string | null
-          updated_at?: string
-        }
+          access_revoked_at?: string | null;
+          availability?: string | null;
+          avatar_url?: string | null;
+          created_at?: string;
+          description?: string | null;
+          email?: string | null;
+          full_name?: string | null;
+          id: string;
+          membership_removed_at?: string | null;
+          nickname?: string | null;
+          title?: string | null;
+          updated_at?: string;
+        };
         Update: {
-          access_revoked_at?: string | null
-          availability?: string | null
-          avatar_url?: string | null
-          created_at?: string
-          description?: string | null
-          email?: string | null
-          full_name?: string | null
-          id?: string
-          membership_removed_at?: string | null
-          nickname?: string | null
-          title?: string | null
-          updated_at?: string
-        }
-        Relationships: []
-      }
+          access_revoked_at?: string | null;
+          availability?: string | null;
+          avatar_url?: string | null;
+          created_at?: string;
+          description?: string | null;
+          email?: string | null;
+          full_name?: string | null;
+          id?: string;
+          membership_removed_at?: string | null;
+          nickname?: string | null;
+          title?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       task_comments: {
         Row: {
-          author_id: string
-          body: string
-          created_at: string
-          id: string
-          task_id: string
-        }
+          author_id: string;
+          body: string;
+          created_at: string;
+          id: string;
+          task_id: string;
+        };
         Insert: {
-          author_id?: string
-          body: string
-          created_at?: string
-          id?: string
-          task_id: string
-        }
+          author_id?: string;
+          body: string;
+          created_at?: string;
+          id?: string;
+          task_id: string;
+        };
         Update: {
-          author_id?: string
-          body?: string
-          created_at?: string
-          id?: string
-          task_id?: string
-        }
+          author_id?: string;
+          body?: string;
+          created_at?: string;
+          id?: string;
+          task_id?: string;
+        };
         Relationships: [
           {
-            foreignKeyName: "task_comments_task_id_fkey"
-            columns: ["task_id"]
-            isOneToOne: false
-            referencedRelation: "tasks"
-            referencedColumns: ["id"]
+            foreignKeyName: "task_comments_task_id_fkey";
+            columns: ["task_id"];
+            isOneToOne: false;
+            referencedRelation: "tasks";
+            referencedColumns: ["id"];
           },
-        ]
-      }
+        ];
+      };
       tasks: {
         Row: {
-          archived_at: string | null
-          completed_at: string | null
-          created_at: string
-          created_by: string | null
-          creator_id: string | null
-          dedupe_key: string | null
-          description: string | null
-          due_date: string | null
-          due_time: string | null
-          id: string
-          member_type: string | null
-          owner_id: string | null
-          priority: Database["public"]["Enums"]["task_priority"]
-          source: string
-          status: Database["public"]["Enums"]["task_status"]
-          title: string
-          updated_at: string
-          visible_to_creator: boolean
-        }
+          archived_at: string | null;
+          completed_at: string | null;
+          created_at: string;
+          created_by: string | null;
+          creator_id: string | null;
+          dedupe_key: string | null;
+          description: string | null;
+          due_date: string | null;
+          due_time: string | null;
+          id: string;
+          member_type: string | null;
+          owner_id: string | null;
+          priority: Database["public"]["Enums"]["task_priority"];
+          source: string;
+          status: Database["public"]["Enums"]["task_status"];
+          title: string;
+          updated_at: string;
+          visible_to_creator: boolean;
+        };
         Insert: {
-          archived_at?: string | null
-          completed_at?: string | null
-          created_at?: string
-          created_by?: string | null
-          creator_id?: string | null
-          dedupe_key?: string | null
-          description?: string | null
-          due_date?: string | null
-          due_time?: string | null
-          id?: string
-          member_type?: string | null
-          owner_id?: string | null
-          priority?: Database["public"]["Enums"]["task_priority"]
-          source?: string
-          status?: Database["public"]["Enums"]["task_status"]
-          title: string
-          updated_at?: string
-          visible_to_creator?: boolean
-        }
+          archived_at?: string | null;
+          completed_at?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          creator_id?: string | null;
+          dedupe_key?: string | null;
+          description?: string | null;
+          due_date?: string | null;
+          due_time?: string | null;
+          id?: string;
+          member_type?: string | null;
+          owner_id?: string | null;
+          priority?: Database["public"]["Enums"]["task_priority"];
+          source?: string;
+          status?: Database["public"]["Enums"]["task_status"];
+          title: string;
+          updated_at?: string;
+          visible_to_creator?: boolean;
+        };
         Update: {
-          archived_at?: string | null
-          completed_at?: string | null
-          created_at?: string
-          created_by?: string | null
-          creator_id?: string | null
-          dedupe_key?: string | null
-          description?: string | null
-          due_date?: string | null
-          due_time?: string | null
-          id?: string
-          member_type?: string | null
-          owner_id?: string | null
-          priority?: Database["public"]["Enums"]["task_priority"]
-          source?: string
-          status?: Database["public"]["Enums"]["task_status"]
-          title?: string
-          updated_at?: string
-          visible_to_creator?: boolean
-        }
+          archived_at?: string | null;
+          completed_at?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          creator_id?: string | null;
+          dedupe_key?: string | null;
+          description?: string | null;
+          due_date?: string | null;
+          due_time?: string | null;
+          id?: string;
+          member_type?: string | null;
+          owner_id?: string | null;
+          priority?: Database["public"]["Enums"]["task_priority"];
+          source?: string;
+          status?: Database["public"]["Enums"]["task_status"];
+          title?: string;
+          updated_at?: string;
+          visible_to_creator?: boolean;
+        };
         Relationships: [
           {
-            foreignKeyName: "tasks_creator_id_fkey"
-            columns: ["creator_id"]
-            isOneToOne: false
-            referencedRelation: "creators"
-            referencedColumns: ["id"]
+            foreignKeyName: "tasks_creator_id_fkey";
+            columns: ["creator_id"];
+            isOneToOne: false;
+            referencedRelation: "creators";
+            referencedColumns: ["id"];
           },
-        ]
-      }
+        ];
+      };
       transactions: {
         Row: {
-          agency_share_pct: number | null
-          amount: number
-          archived_at: string | null
-          category: string
-          created_at: string
-          created_by: string | null
-          creator_id: string | null
-          currency: string
-          description: string | null
-          external_ref: string | null
-          id: string
-          kind: Database["public"]["Enums"]["txn_kind"]
-          occurred_on: string
-          shared_with_creator: boolean
-          updated_at: string
-        }
+          agency_share_pct: number | null;
+          amount: number;
+          archived_at: string | null;
+          category: string;
+          created_at: string;
+          created_by: string | null;
+          creator_id: string | null;
+          currency: string;
+          description: string | null;
+          external_ref: string | null;
+          id: string;
+          kind: Database["public"]["Enums"]["txn_kind"];
+          occurred_on: string;
+          shared_with_creator: boolean;
+          updated_at: string;
+        };
         Insert: {
-          agency_share_pct?: number | null
-          amount: number
-          archived_at?: string | null
-          category?: string
-          created_at?: string
-          created_by?: string | null
-          creator_id?: string | null
-          currency?: string
-          description?: string | null
-          external_ref?: string | null
-          id?: string
-          kind: Database["public"]["Enums"]["txn_kind"]
-          occurred_on?: string
-          shared_with_creator?: boolean
-          updated_at?: string
-        }
+          agency_share_pct?: number | null;
+          amount: number;
+          archived_at?: string | null;
+          category?: string;
+          created_at?: string;
+          created_by?: string | null;
+          creator_id?: string | null;
+          currency?: string;
+          description?: string | null;
+          external_ref?: string | null;
+          id?: string;
+          kind: Database["public"]["Enums"]["txn_kind"];
+          occurred_on?: string;
+          shared_with_creator?: boolean;
+          updated_at?: string;
+        };
         Update: {
-          agency_share_pct?: number | null
-          amount?: number
-          archived_at?: string | null
-          category?: string
-          created_at?: string
-          created_by?: string | null
-          creator_id?: string | null
-          currency?: string
-          description?: string | null
-          external_ref?: string | null
-          id?: string
-          kind?: Database["public"]["Enums"]["txn_kind"]
-          occurred_on?: string
-          shared_with_creator?: boolean
-          updated_at?: string
-        }
+          agency_share_pct?: number | null;
+          amount?: number;
+          archived_at?: string | null;
+          category?: string;
+          created_at?: string;
+          created_by?: string | null;
+          creator_id?: string | null;
+          currency?: string;
+          description?: string | null;
+          external_ref?: string | null;
+          id?: string;
+          kind?: Database["public"]["Enums"]["txn_kind"];
+          occurred_on?: string;
+          shared_with_creator?: boolean;
+          updated_at?: string;
+        };
         Relationships: [
           {
-            foreignKeyName: "transactions_creator_id_fkey"
-            columns: ["creator_id"]
-            isOneToOne: false
-            referencedRelation: "creators"
-            referencedColumns: ["id"]
+            foreignKeyName: "transactions_creator_id_fkey";
+            columns: ["creator_id"];
+            isOneToOne: false;
+            referencedRelation: "creators";
+            referencedColumns: ["id"];
           },
-        ]
-      }
+        ];
+      };
       user_areas: {
         Row: {
-          area: Database["public"]["Enums"]["work_area"]
-          created_at: string
-          id: string
-          user_id: string
-        }
+          area: Database["public"]["Enums"]["work_area"];
+          created_at: string;
+          id: string;
+          user_id: string;
+        };
         Insert: {
-          area: Database["public"]["Enums"]["work_area"]
-          created_at?: string
-          id?: string
-          user_id: string
-        }
+          area: Database["public"]["Enums"]["work_area"];
+          created_at?: string;
+          id?: string;
+          user_id: string;
+        };
         Update: {
-          area?: Database["public"]["Enums"]["work_area"]
-          created_at?: string
-          id?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
+          area?: Database["public"]["Enums"]["work_area"];
+          created_at?: string;
+          id?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       user_roles: {
         Row: {
-          created_at: string
-          id: string
-          role: Database["public"]["Enums"]["app_role"]
-          user_id: string
-        }
+          created_at: string;
+          id: string;
+          role: Database["public"]["Enums"]["app_role"];
+          user_id: string;
+        };
         Insert: {
-          created_at?: string
-          id?: string
-          role: Database["public"]["Enums"]["app_role"]
-          user_id: string
-        }
+          created_at?: string;
+          id?: string;
+          role: Database["public"]["Enums"]["app_role"];
+          user_id: string;
+        };
         Update: {
-          created_at?: string
-          id?: string
-          role?: Database["public"]["Enums"]["app_role"]
-          user_id?: string
-        }
-        Relationships: []
-      }
-    }
+          created_at?: string;
+          id?: string;
+          role?: Database["public"]["Enums"]["app_role"];
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+    };
     Views: {
-      [_ in never]: never
-    }
+      [_ in never]: never;
+    };
     Functions: {
-      accept_invitation: { Args: { _token_hash: string }; Returns: boolean }
-      can_access_creator: { Args: { _creator_id: string }; Returns: boolean }
-      can_see_task: { Args: { _task_id: string }; Returns: boolean }
-      claim_first_executive: { Args: never; Returns: boolean }
+      accept_invitation: { Args: { _token_hash: string }; Returns: boolean };
+      can_access_creator: { Args: { _creator_id: string }; Returns: boolean };
+      can_see_task: { Args: { _task_id: string }; Returns: boolean };
+      claim_first_executive: { Args: never; Returns: boolean };
       create_invitation: {
         Args: {
-          _areas?: Database["public"]["Enums"]["work_area"][]
-          _email: string
-          _role: Database["public"]["Enums"]["app_role"]
-          _token_hash: string
-        }
-        Returns: Json
-      }
+          _areas?: Database["public"]["Enums"]["work_area"][];
+          _email: string;
+          _role: Database["public"]["Enums"]["app_role"];
+          _token_hash: string;
+        };
+        Returns: Json;
+      };
       creator_set_task_status: {
         Args: {
-          _status: Database["public"]["Enums"]["task_status"]
-          _task_id: string
-        }
-        Returns: undefined
-      }
-      executives_exist: { Args: never; Returns: boolean }
+          _status: Database["public"]["Enums"]["task_status"];
+          _task_id: string;
+        };
+        Returns: undefined;
+      };
+      executives_exist: { Args: never; Returns: boolean };
       has_area: {
-        Args: { _area: Database["public"]["Enums"]["work_area"] }
-        Returns: boolean
-      }
+        Args: { _area: Database["public"]["Enums"]["work_area"] };
+        Returns: boolean;
+      };
       has_role: {
         Args: {
-          _role: Database["public"]["Enums"]["app_role"]
-          _user_id: string
-        }
-        Returns: boolean
-      }
-      is_active_member: { Args: { _user_id: string }; Returns: boolean }
-      is_executive: { Args: never; Returns: boolean }
-      is_own_creator: { Args: { _creator_id: string }; Returns: boolean }
-      remove_team_member: { Args: { _user_id: string }; Returns: boolean }
-      revoke_invitation: { Args: { _id: string }; Returns: boolean }
+          _role: Database["public"]["Enums"]["app_role"];
+          _user_id: string;
+        };
+        Returns: boolean;
+      };
+      is_active_member: { Args: { _user_id: string }; Returns: boolean };
+      is_executive: { Args: never; Returns: boolean };
+      is_own_creator: { Args: { _creator_id: string }; Returns: boolean };
+      remove_team_member: { Args: { _user_id: string }; Returns: boolean };
+      revoke_invitation: { Args: { _id: string }; Returns: boolean };
       revoke_team_member_access: {
-        Args: { _user_id: string }
-        Returns: boolean
-      }
-    }
+        Args: { _user_id: string };
+        Returns: boolean;
+      };
+    };
     Enums: {
-      app_role: "executive" | "employee" | "creator" | "partner"
-      creator_status: "lead" | "onboarding" | "active" | "paused" | "offboarded"
-      task_priority: "low" | "medium" | "high" | "critical"
-      task_status: "todo" | "in_progress" | "blocked" | "review" | "done"
-      txn_kind: "revenue" | "expense" | "payout"
+      app_role: "executive" | "employee" | "creator" | "partner";
+      creator_status: "lead" | "onboarding" | "active" | "paused" | "offboarded";
+      task_priority: "low" | "medium" | "high" | "critical";
+      task_status: "todo" | "in_progress" | "blocked" | "review" | "done";
+      txn_kind: "revenue" | "expense" | "payout";
       work_area:
         | "marketing"
         | "sharing"
@@ -534,130 +528,124 @@ export type Database = {
         | "creator_management"
         | "chatting"
         | "creator_manager"
-        | "admin"
-    }
+        | "admin";
+    };
     CompositeTypes: {
-      [_ in never]: never
-    }
-  }
-}
+      [_ in never]: never;
+    };
+  };
+};
 
-type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">;
 
-type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">];
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
   TableName extends (DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
+    schema: keyof DatabaseWithoutInternals;
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
     : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
+  schema: keyof DatabaseWithoutInternals;
 }
   ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
       DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
-      Row: infer R
+      Row: infer R;
     }
     ? R
     : never
-  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])
-    ? (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
-        Row: infer R
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] & DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R;
       }
       ? R
       : never
-    : never
+    : never;
 
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
+    keyof DefaultSchema["Tables"] | { schema: keyof DatabaseWithoutInternals },
   TableName extends (DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
+    schema: keyof DatabaseWithoutInternals;
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
+  schema: keyof DatabaseWithoutInternals;
 }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Insert: infer I
+      Insert: infer I;
     }
     ? I
     : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
     ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Insert: infer I
+        Insert: infer I;
       }
       ? I
       : never
-    : never
+    : never;
 
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
+    keyof DefaultSchema["Tables"] | { schema: keyof DatabaseWithoutInternals },
   TableName extends (DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
+    schema: keyof DatabaseWithoutInternals;
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
+  schema: keyof DatabaseWithoutInternals;
 }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Update: infer U
+      Update: infer U;
     }
     ? U
     : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
     ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Update: infer U
+        Update: infer U;
       }
       ? U
       : never
-    : never
+    : never;
 
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
-    | keyof DefaultSchema["Enums"]
-    | { schema: keyof DatabaseWithoutInternals },
+    keyof DefaultSchema["Enums"] | { schema: keyof DatabaseWithoutInternals },
   EnumName extends (DefaultSchemaEnumNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
+    schema: keyof DatabaseWithoutInternals;
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
     : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
+  schema: keyof DatabaseWithoutInternals;
 }
   ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
     ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
-    : never
+    : never;
 
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
-    | keyof DefaultSchema["CompositeTypes"]
-    | { schema: keyof DatabaseWithoutInternals },
+    keyof DefaultSchema["CompositeTypes"] | { schema: keyof DatabaseWithoutInternals },
   CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
+    schema: keyof DatabaseWithoutInternals;
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
     : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
+  schema: keyof DatabaseWithoutInternals;
 }
   ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
-    : never
+    : never;
 
 export const Constants = {
   public: {
@@ -678,4 +666,4 @@ export const Constants = {
       ],
     },
   },
-} as const
+} as const;
