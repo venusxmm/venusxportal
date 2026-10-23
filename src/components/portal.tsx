@@ -50,9 +50,9 @@ export function Stat({
   hint?: string | undefined;
 }) {
   return (
-    <div className="rounded-lg border bg-card p-5">
+    <div className="min-w-0 rounded-lg border bg-card p-3 sm:p-5">
       <p className="text-xs uppercase tracking-widest text-muted-foreground">{label}</p>
-      <p className="mt-2 text-2xl font-semibold">{value}</p>
+      <p className="mt-2 break-words text-lg font-semibold sm:text-2xl">{value}</p>
       {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
