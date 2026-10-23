@@ -48,6 +48,7 @@ Migrations are in [`drizzle/migrations`](./drizzle/migrations). In particular:
 - `0009_finance_hard_delete.sql` adds Executive-only hard deletion for ledger entries and audit logging.
 - `0010_team_member_removal.sql` adds membership revocation/removal protections and updates access policies.
 - `0011_creator_private_details.sql` moves internal creator notes and photo paths out of `creators`, then limits private-detail and task-comment reads to authorized staff.
+- `0012_task_returning_rls.sql` makes task reads evaluate the current row directly so authenticated inserts using `RETURNING` can pass the same visibility rules.
 
 Before applying migrations, identify the project from the connection target and inspect its migration journal. Do not assume a remote environment is staging, and do not blindly reapply `0009` or `0010`.
 
@@ -56,6 +57,8 @@ The configured Drizzle PostgreSQL migrator wraps its migration batch in a databa
 `0011_creator_private_details.sql` was applied in the VenusX Lovable Cloud SQL Editor in a transaction. Before applying it, a read-only preflight confirmed that the required access helper functions existed and that `creators` had no rows or private values to backfill. Afterward, catalog queries confirmed that the private table has RLS enabled, the expected staff read and write policies and grants, the creator foreign key cascades on deletion, the legacy columns are gone, and the task-comment read policy enforces active staff access. The `creator-photos` bucket remains private with its four staff policies. These catalog checks do not prove authorization through real authenticated sessions.
 
 The SQL Editor execution does not record the migration in Drizzle's `drizzle.__drizzle_migrations` ledger. The observed ledger contains only the initial migration entries, although later Cloud changes had already been applied. Do not run `drizzle-kit migrate` against this database until its ledger is reconciled with the full Cloud migration history; otherwise it may try to replay already-applied migrations.
+
+`0012_task_returning_rls.sql` was applied in the VenusX Lovable Cloud SQL Editor on 2026-10-23. It replaces the `tasks read` policy's call to `can_see_task(id)` with the equivalent active-member, owner, creator, employee-scope and creator-portal checks against the row being evaluated. The helper remains in use by task comments and the creator status RPC. A rollback-only PostgreSQL check under the `authenticated` database role, using the active Executive account's identity, verified task `INSERT ... RETURNING`, subsequent read and update; the probe was rolled back and catalog checks confirmed no probe row persisted. This verifies PostgreSQL RLS behavior, not a browser session through Supabase Auth/PostgREST. Cloud currently has no active Employee account, so an Employee session could not be tested.
 
 There is no automatic down migration for `0011`. If it fails before commit, the migration transaction rolls back. After it commits, prefer a forward-fix. Restoring the database from a verified backup or point-in-time recovery is the recovery path for broader data loss. Do not copy private values back into `creators` without first changing the access boundary in the same controlled operation; column-level privacy is not enforced by row-level security.
 
