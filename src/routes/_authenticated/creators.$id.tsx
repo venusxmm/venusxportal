@@ -296,7 +296,7 @@ function CreatorPage() {
 function Assignments({ creatorId, canEdit }: { creatorId: string; canEdit: boolean }) {
   const qc = useQueryClient();
   const [user, setUser] = useState("");
-  const [area, setArea] = useState<WorkArea>("creator_manager");
+  const [area, setArea] = useState<WorkArea>("creator_management");
   const a = useQuery({
     queryKey: ["assignments", creatorId],
     queryFn: async () => {

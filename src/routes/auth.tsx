@@ -36,6 +36,9 @@ function AuthPage() {
 
   useEffect(() => {
     let active = true;
+    const restorationFallback = window.setTimeout(() => {
+      if (active) setReady(true);
+    }, 5000);
 
     supabase.auth
       .getSession()
@@ -56,6 +59,9 @@ function AuthPage() {
         if (!active) return;
         toast.error((error as Error).message);
         setReady(true);
+      })
+      .finally(() => {
+        window.clearTimeout(restorationFallback);
       });
 
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -69,6 +75,7 @@ function AuthPage() {
 
     return () => {
       active = false;
+      window.clearTimeout(restorationFallback);
       data.subscription.unsubscribe();
     };
   }, [invite, navigate]);

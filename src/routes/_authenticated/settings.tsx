@@ -38,6 +38,34 @@ function SettingsPage() {
     description: string;
     avatar_url: string;
   } | null>(null);
+  const uploadPhoto = useMutation({
+    mutationFn: async (file: File) => {
+      const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+      if (!allowed.includes(file.type)) throw new Error("Choose a JPG, PNG, WEBP, or GIF image.");
+      if (file.size > 5 * 1024 * 1024) throw new Error("Profile images must be 5 MB or smaller.");
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) throw new Error("You are signed out.");
+      const extension = file.type.split("/")[1] === "jpeg" ? "jpg" : file.type.split("/")[1];
+      const path = `${user.user.id}/avatar.${extension}`;
+      const { error: uploadError } = await supabase.storage
+        .from("profile-photos")
+        .upload(path, file, { upsert: true, contentType: file.type, cacheControl: "3600" });
+      if (uploadError) throw uploadError;
+      const avatarUrl = supabase.storage.from("profile-photos").getPublicUrl(path).data.publicUrl;
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .update({ avatar_url: avatarUrl })
+        .eq("id", user.user.id);
+      if (profileError) throw profileError;
+      return avatarUrl;
+    },
+    onSuccess: (avatarUrl) => {
+      setForm({ ...values, avatar_url: avatarUrl });
+      toast.success("Profile photo uploaded");
+      qc.invalidateQueries({ queryKey: ["profile", "self"] });
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
   const save = useMutation({
     mutationFn: async () => {
       if (!form) return;
@@ -89,6 +117,36 @@ function SettingsPage() {
             save.mutate();
           }}
         >
+          <div className="flex items-center gap-4 border-b pb-5">
+            {values.avatar_url ? (
+              <img
+                src={values.avatar_url}
+                alt="Profile"
+                className="h-20 w-20 rounded-full object-cover"
+              />
+            ) : (
+              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-muted text-2xl text-muted-foreground">
+                {(values.nickname || values.full_name || "?").slice(0, 1).toUpperCase()}
+              </div>
+            )}
+            <div className="space-y-2">
+              <Label htmlFor="profile-photo">Profile photo</Label>
+              <Input
+                id="profile-photo"
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                disabled={uploadPhoto.isPending}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) uploadPhoto.mutate(file);
+                  event.currentTarget.value = "";
+                }}
+              />
+              <p className="text-xs text-muted-foreground">
+                {uploadPhoto.isPending ? "Uploading…" : "JPG, PNG, WEBP, or GIF · 5 MB maximum"}
+              </p>
+            </div>
+          </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1">
               <Label>Full name</Label>
@@ -106,15 +164,6 @@ function SettingsPage() {
                 maxLength={80}
               />
             </div>
-          </div>
-          <div className="space-y-1">
-            <Label>Profile photo URL</Label>
-            <Input
-              type="url"
-              placeholder="https://…"
-              value={values.avatar_url}
-              onChange={(e) => setForm({ ...values, avatar_url: e.target.value })}
-            />
           </div>
           <div className="space-y-1">
             <Label>Description</Label>

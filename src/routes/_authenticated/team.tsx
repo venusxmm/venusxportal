@@ -73,7 +73,11 @@ function Team() {
             : error.message,
         );
       if (!data?.length)
-        throw new Error("This change wasn't allowed. You can't remove your own executive role.");
+        throw new Error(
+          uid === me?.id && role === "executive"
+            ? "You can't remove your own executive role."
+            : "This role change was not allowed.",
+        );
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["team"] });
