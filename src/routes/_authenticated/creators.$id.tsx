@@ -334,7 +334,13 @@ function Assignments({ creatorId, canEdit }: { creatorId: string; canEdit: boole
   const people = useQuery({
     queryKey: ["profiles"],
     queryFn: async () =>
-      (await supabase.from("profiles").select("id,full_name,email").order("full_name")).data ?? [],
+      (
+        await supabase
+          .from("profiles")
+          .select("id,full_name,email")
+          .is("membership_removed_at", null)
+          .order("full_name")
+      ).data ?? [],
   });
   const name = (uid: string) => {
     const p = people.data?.find((x) => x.id === uid);

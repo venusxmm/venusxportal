@@ -199,36 +199,42 @@ export type Database = {
       profiles: {
         Row: {
           availability: string | null;
+          access_revoked_at: string | null;
           avatar_url: string | null;
           created_at: string;
           description: string | null;
           email: string | null;
           full_name: string | null;
           id: string;
+          membership_removed_at: string | null;
           nickname: string | null;
           title: string | null;
           updated_at: string;
         };
         Insert: {
           availability?: string | null;
+          access_revoked_at?: string | null;
           avatar_url?: string | null;
           created_at?: string;
           description?: string | null;
           email?: string | null;
           full_name?: string | null;
           id: string;
+          membership_removed_at?: string | null;
           nickname?: string | null;
           title?: string | null;
           updated_at?: string;
         };
         Update: {
           availability?: string | null;
+          access_revoked_at?: string | null;
           avatar_url?: string | null;
           created_at?: string;
           description?: string | null;
           email?: string | null;
           full_name?: string | null;
           id?: string;
+          membership_removed_at?: string | null;
           nickname?: string | null;
           title?: string | null;
           updated_at?: string;
@@ -450,6 +456,7 @@ export type Database = {
       can_access_creator: { Args: { _creator_id: string }; Returns: boolean };
       can_see_task: { Args: { _task_id: string }; Returns: boolean };
       claim_first_executive: { Args: never; Returns: boolean };
+      is_active_member: { Args: { _user_id: string }; Returns: boolean };
       creator_set_task_status: {
         Args: {
           _status: Database["public"]["Enums"]["task_status"];
@@ -482,6 +489,8 @@ export type Database = {
         Returns: Json;
       };
       revoke_invitation: { Args: { _id: string }; Returns: boolean };
+      remove_team_member: { Args: { _user_id: string }; Returns: boolean };
+      revoke_team_member_access: { Args: { _user_id: string }; Returns: boolean };
     };
     Enums: {
       app_role: "executive" | "employee" | "creator" | "partner";

@@ -1,4 +1,5 @@
 export type LedgerKind = "revenue" | "expense" | "payout";
+export const DEFAULT_AGENCY_SHARE_PCT = 60;
 
 export interface LedgerRow {
   kind: LedgerKind;
@@ -89,9 +90,22 @@ export function monthly(rows: LedgerRow[], currency: string) {
 }
 
 function emptySummary(currency: string): CurrencySummary {
-  return { currency, revenue: 0, expenses: 0, payouts: 0, agencyRevenue: 0, creatorRevenue: 0, netProfit: 0, margin: null };
+  return {
+    currency,
+    revenue: 0,
+    expenses: 0,
+    payouts: 0,
+    agencyRevenue: 0,
+    creatorRevenue: 0,
+    netProfit: 0,
+    margin: null,
+  };
 }
 
 export function money(n: number, currency: string) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 2 }).format(n);
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 2,
+  }).format(n);
 }

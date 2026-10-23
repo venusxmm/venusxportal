@@ -36,7 +36,8 @@ function Team() {
       const [p, r, a] = await Promise.all([
         supabase
           .from("profiles")
-          .select("id,full_name,nickname,avatar_url,email,created_at")
+          .select("id,full_name,nickname,avatar_url,email,created_at,access_revoked_at")
+          .is("membership_removed_at", null)
           .order("created_at"),
         supabase.from("user_roles").select("user_id,role"),
         supabase.from("user_areas").select("user_id,area"),
@@ -116,17 +117,29 @@ function Team() {
   const removeAccess = useMutation({
     mutationFn: async (uid: string) => {
       if (uid === me?.id) throw new Error("You cannot remove your own access.");
-      const areas = await supabase.from("user_areas").delete().eq("user_id", uid);
-      if (areas.error) throw areas.error;
-      const roles = await supabase.from("user_roles").delete().eq("user_id", uid).select("id");
-      if (roles.error) throw roles.error;
-      if (!roles.data?.length) throw new Error("This member has no removable roles.");
+      const { data, error } = await supabase.rpc("revoke_team_member_access", {
+        _user_id: uid,
+      });
+      if (error) throw error;
+      if (!data) throw new Error("Member access was not revoked.");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["team"] });
       toast.success("Member access revoked");
     },
     onError: (e) => toast.error((e as Error).message),
+  });
+  const removeMember = useMutation({
+    mutationFn: async (uid: string) => {
+      const { data, error } = await supabase.rpc("remove_team_member", { _user_id: uid });
+      if (error) throw error;
+      if (!data) throw new Error("Member was not removed.");
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["team"] });
+      toast.success("Member removed from Team & Access");
+    },
+    onError: (error) => toast.error((error as Error).message),
   });
 
   if (!me?.isExec) return <EmptyState title="Restricted" body="Only executives manage access." />;
@@ -155,6 +168,9 @@ function Team() {
           <tbody className="divide-y">
             {d.people.map((p) => {
               const has = (r: AppRole) => d.roles.some((x) => x.user_id === p.id && x.role === r);
+              const hasArea = d.areas.some((area) => area.user_id === p.id);
+              const hasAccess = ROLES.some(has) || hasArea;
+              const accessRevoked = !!p.access_revoked_at;
               const isEmp = has("employee");
               return (
                 <tr key={p.id}>
@@ -177,6 +193,9 @@ function Team() {
                           {p.full_name && p.nickname ? `${p.full_name} · ` : ""}
                           {p.email}
                         </p>
+                        {accessRevoked && (
+                          <p className="text-xs font-medium text-destructive">Access revoked</p>
+                        )}
                       </div>
                     </div>
                   </td>
@@ -212,7 +231,7 @@ function Team() {
                     )}
                   </td>
                   <td className="p-3 text-right">
-                    {p.id !== me.id && (
+                    {p.id !== me.id && hasAccess && (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -225,6 +244,21 @@ function Team() {
                         }
                       >
                         Revoke access
+                      </Button>
+                    )}
+                    {p.id !== me.id && accessRevoked && !hasAccess && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive"
+                        disabled={removeMember.isPending}
+                        onClick={() =>
+                          confirm(
+                            `Remove ${p.nickname || p.full_name || p.email} from Team & Access? Their sign-in identity will remain for historical references, but without roles or work areas they will not have portal access. A new role grant or accepted invitation can restore membership.`,
+                          ) && removeMember.mutate(p.id)
+                        }
+                      >
+                        Remove from team
                       </Button>
                     )}
                   </td>

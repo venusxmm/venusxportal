@@ -22,6 +22,15 @@ export const meQuery = queryOptions({
   queryFn: async (): Promise<Me | null> => {
     const { data: u } = await supabase.auth.getUser();
     if (!u.user) return null;
+    const { data: active, error: activeError } = await supabase.rpc("is_active_member", {
+      _user_id: u.user.id,
+    });
+    if (activeError) throw activeError;
+    if (!active) {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      return null;
+    }
     const [roles, areas, profile, creator] = await Promise.all([
       supabase.from("user_roles").select("role").eq("user_id", u.user.id),
       supabase.from("user_areas").select("area").eq("user_id", u.user.id),

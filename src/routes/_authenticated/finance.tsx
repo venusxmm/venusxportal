@@ -1,13 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { Pencil, Trash2 } from "lucide-react";
+import { ArchiveRestore, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { useMe } from "@/lib/me";
-import { inRange, monthly, money, summarize } from "@/lib/finance";
+import { DEFAULT_AGENCY_SHARE_PCT, inRange, monthly, money, summarize } from "@/lib/finance";
 import { EmptyState, ErrorNote, Loading, PageHeader, Pill, Stat } from "@/components/portal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -84,19 +84,27 @@ function Finance() {
   });
   const archive = useMutation({
     mutationFn: async ({ id, on }: { id: string; on: boolean }) => {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("transactions")
         .update({ archived_at: on ? new Date().toISOString() : null })
-        .eq("id", id);
+        .eq("id", id)
+        .select("id");
       if (error) throw error;
+      if (!data?.length) throw new Error("Transaction was not found or update was not authorized.");
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["transactions"] }),
     onError: (e) => toast.error((e as Error).message),
   });
   const deleteTxn = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("transactions").delete().eq("id", id);
+      const { data, error } = await supabase
+        .from("transactions")
+        .delete()
+        .eq("id", id)
+        .select("id");
       if (error) throw error;
+      if (!data?.length)
+        throw new Error("Transaction was not found or deletion was not authorized.");
     },
     onSuccess: () => {
       toast.success("Transaction deleted");
@@ -264,22 +272,34 @@ function Finance() {
                         )}
                         <Button
                           aria-label={
-                            t.archived_at ? `Restore ${t.category}` : `Delete ${t.category}`
+                            t.archived_at ? `Restore ${t.category}` : `Void ${t.category}`
                           }
-                          title={
-                            t.archived_at
-                              ? "Restore transaction"
-                              : "Delete transaction permanently"
-                          }
+                          title={t.archived_at ? "Restore transaction" : "Void transaction"}
                           variant="ghost"
                           size="icon"
-                          className={t.archived_at ? "" : "text-destructive"}
+                          disabled={archive.isPending}
                           onClick={() => {
-                            if (t.archived_at) {
-                              if (confirm("Restore this entry?")) archive.mutate({ id: t.id, on: false });
-                            } else if (confirm(`Permanently delete ${t.category}? This cannot be undone.`)) {
+                            const action = t.archived_at ? "Restore" : "Void";
+                            if (confirm(`${action} ${t.category}?`))
+                              archive.mutate({ id: t.id, on: !t.archived_at });
+                          }}
+                        >
+                          <ArchiveRestore className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          aria-label={`Permanently delete ${t.category}`}
+                          title="Permanently delete transaction"
+                          variant="ghost"
+                          size="icon"
+                          className="text-destructive"
+                          disabled={deleteTxn.isPending}
+                          onClick={() => {
+                            if (
+                              confirm(
+                                `Permanently delete ${t.category}? This cannot be undone. An audit event will remain.`,
+                              )
+                            )
                               deleteTxn.mutate(t.id);
-                            }
                           }}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -315,11 +335,11 @@ function NewTxn({
 }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(!!transaction);
-  const init = {
+  const makeInitialForm = () => ({
     kind: transaction?.kind ?? "none",
     amount: transaction ? String(transaction.amount) : "",
     currency: transaction?.currency ?? "none",
-    occurred_on: transaction?.occurred_on ?? new Date().toISOString().slice(0, 10),
+    occurred_on: transaction?.occurred_on ?? localDateString(),
     category: transaction?.category ?? "",
     description: transaction?.description ?? "",
     creator_id: transaction?.creator_id ?? "none",
@@ -327,43 +347,53 @@ function NewTxn({
       transaction?.agency_share_pct == null ? "" : String(transaction.agency_share_pct),
     external_ref: transaction?.external_ref ?? "",
     shared_with_creator: transaction?.shared_with_creator ?? false,
-  };
-  const [f, setF] = useState(init);
+  });
+  const [f, setF] = useState(makeInitialForm);
+  const [agencyShareEdited, setAgencyShareEdited] = useState(transaction?.agency_share_pct != null);
   const m = useMutation({
     mutationFn: async () => {
       const amt = Number(f.amount);
-      if (!(amt > 0)) throw new Error("Amount must be greater than 0");
-      if (!/^[A-Z]{3}$/.test(f.currency)) throw new Error("Currency must be a 3-letter code");
+      if (!Number.isFinite(amt) || !(amt > 0))
+        throw new Error("Amount must be a finite number greater than 0");
+      if (!isCurrencyCode(f.currency)) throw new Error("Select USD, EUR, or COP.");
       const pct = f.agency_share_pct === "" ? null : Number(f.agency_share_pct);
-      if (pct != null && (pct < 0 || pct > 100)) throw new Error("Agency % must be 0–100");
+      if (pct != null && (!Number.isFinite(pct) || pct < 0 || pct > 100))
+        throw new Error("Agency % must be a number from 0 to 100");
       if (f.kind === "none") throw new Error("Select a transaction type");
-      if (f.currency === "none") throw new Error("Select a currency");
+      if (f.kind === "revenue" && pct == null)
+        throw new Error("Enter the agency share percentage for this revenue.");
+      if (!f.category.trim()) throw new Error("Enter a category.");
       const payload = {
         kind: f.kind as Kind,
         amount: amt,
         currency: f.currency,
         occurred_on: f.occurred_on,
-        category: f.category.trim() || "general",
+        category: f.category.trim(),
         description: f.description || null,
         creator_id: f.creator_id === "none" ? null : f.creator_id,
         agency_share_pct: f.kind === "revenue" ? pct : null,
         external_ref: f.external_ref.trim() || null,
         shared_with_creator: f.shared_with_creator,
       };
-      const { error } = transaction
-        ? await supabase.from("transactions").update(payload).eq("id", transaction.id)
-        : await supabase.from("transactions").insert(payload);
+      const { data, error } = transaction
+        ? await supabase.from("transactions").update(payload).eq("id", transaction.id).select("id")
+        : await supabase.from("transactions").insert(payload).select("id");
       if (error)
         throw error.message.includes("external_ref")
           ? new Error("An entry with this reference already exists (duplicate import prevented).")
           : error;
+      if (!data?.length)
+        throw new Error("Transaction was not found or this change was not authorized.");
     },
     onSuccess: () => {
       toast.success(transaction ? "Entry updated" : "Entry recorded");
       qc.invalidateQueries({ queryKey: ["transactions"] });
       setOpen(false);
       onClose?.();
-      if (!transaction) setF(init);
+      if (!transaction) {
+        setF(makeInitialForm());
+        setAgencyShareEdited(false);
+      }
     },
     onError: (e) => toast.error((e as Error).message),
   });
@@ -393,7 +423,21 @@ function NewTxn({
         >
           <div className="space-y-1">
             <Label>Type</Label>
-            <Select value={f.kind} onValueChange={(v) => setF({ ...f, kind: v as Kind | "none", agency_share_pct: v === "revenue" && f.agency_share_pct === "" ? "60" : v === "revenue" ? f.agency_share_pct : "" })}>
+            <Select
+              value={f.kind}
+              onValueChange={(value) =>
+                setF((current) => ({
+                  ...current,
+                  kind: value as Kind | "none",
+                  agency_share_pct:
+                    value === "revenue"
+                      ? agencyShareEdited
+                        ? current.agency_share_pct
+                        : current.agency_share_pct || String(DEFAULT_AGENCY_SHARE_PCT)
+                      : current.agency_share_pct,
+                }))
+              }
+            >
               <SelectTrigger className="capitalize">
                 <SelectValue placeholder="Select type" />
               </SelectTrigger>
@@ -430,7 +474,9 @@ function NewTxn({
           <div className="space-y-1">
             <Label>Currency</Label>
             <Select value={f.currency} onValueChange={(v) => setF({ ...f, currency: v })}>
-              <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue placeholder="Select currency" />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">Select currency</SelectItem>
                 <SelectItem value="USD">USD — US Dollar</SelectItem>
@@ -442,7 +488,8 @@ function NewTxn({
           <div className="space-y-1">
             <Label>Category</Label>
             <Input
-              placeholder="e.g. subscriptions"
+              placeholder="Enter a category"
+              required
               value={f.category}
               onChange={(e) => setF({ ...f, category: e.target.value })}
             />
@@ -470,10 +517,29 @@ function NewTxn({
                 type="number"
                 min="0"
                 max="100"
-                placeholder="100"
+                required
+                placeholder={String(DEFAULT_AGENCY_SHARE_PCT)}
                 value={f.agency_share_pct}
-                onChange={(e) => setF({ ...f, agency_share_pct: e.target.value })}
+                onChange={(e) => {
+                  setAgencyShareEdited(true);
+                  setF({ ...f, agency_share_pct: e.target.value });
+                }}
               />
+              <p className="text-xs text-muted-foreground">
+                {f.amount && f.currency !== "none" && f.agency_share_pct ? (
+                  <>
+                    Agency:{" "}
+                    {money((Number(f.amount) * Number(f.agency_share_pct)) / 100, f.currency)}
+                    {" · Creator: "}
+                    {money(
+                      Number(f.amount) - (Number(f.amount) * Number(f.agency_share_pct)) / 100,
+                      f.currency,
+                    )}
+                  </>
+                ) : (
+                  "Enter an amount to preview the revenue split."
+                )}
+              </p>
             </div>
           )}
           <div className="space-y-1">
@@ -507,4 +573,15 @@ function NewTxn({
       </DialogContent>
     </Dialog>
   );
+}
+
+function localDateString(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function isCurrencyCode(value: string): value is "USD" | "EUR" | "COP" {
+  return value === "USD" || value === "EUR" || value === "COP";
 }

@@ -71,6 +71,13 @@
       "when": 1792712007000,
       "tag": "0009_finance_hard_delete",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792712008000,
+      "tag": "0010_team_member_removal",
+      "breakpoints": true
     }
   ]
 }
