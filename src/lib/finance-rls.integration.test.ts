@@ -21,6 +21,10 @@ const postCreatorPayoutMigration = readFileSync(
   resolve(process.cwd(), "drizzle/migrations/0015_post_creator_payout.sql"),
   "utf8",
 );
+const expenseAgencyCutAndDeleteMigration = readFileSync(
+  resolve(process.cwd(), "drizzle/migrations/0016_expense_agency_cut_and_delete.sql"),
+  "utf8",
+);
 const ids = {
   executive: "00000000-0000-0000-0000-000000000001",
   employee: "00000000-0000-0000-0000-000000000002",
@@ -164,13 +168,15 @@ describe("finance row-level security integration", () => {
     await db.exec(archiveOnlyMigration);
     await db.exec(postCreatorPayoutMigration);
     await db.exec(postCreatorPayoutMigration);
+    await db.exec(expenseAgencyCutAndDeleteMigration);
+    await db.exec(expenseAgencyCutAndDeleteMigration);
   });
 
   afterEach(async () => {
     await db.close();
   });
 
-  it("allows an executive to create, void, and restore an expense but prevents hard deletion", async () => {
+  it("allows an executive to create, void, restore, and safely delete an expense", async () => {
     const { rows } = await asUser(ids.executive, () =>
       db.query<{ id: string }>(
         "insert into public.transactions (kind, amount, category) values ('expense', 12.50, 'QA expense') returning id",
@@ -200,11 +206,21 @@ describe("finance row-level security integration", () => {
         db.query("delete from public.transactions where id = $1 returning id", [entryId]),
       ),
     ).rejects.toThrow(/permission denied/i);
+
+    const { rows: deleted } = await asUser(ids.executive, () =>
+      db.query<{ delete_expense: string }>("select public.delete_expense($1)", [entryId]),
+    );
+    expect(deleted[0]?.delete_expense).toBe(entryId);
+    const { rows: remaining } = await db.query("select id from public.transactions where id = $1", [
+      entryId,
+    ]);
+    expect(remaining).toHaveLength(0);
+
     const { rows: auditRows } = await db.query<{ count: string }>(
       "select count(*)::text as count from public.audit_events where entity_id = $1 and action in ('insert', 'update', 'delete')",
       [entryId],
     );
-    expect(Number(auditRows[0]?.count)).toBe(3);
+    expect(Number(auditRows[0]?.count)).toBe(4);
   });
 
   it("denies an employee permission to create, change, or delete ledger entries", async () => {
@@ -227,6 +243,63 @@ describe("finance row-level security integration", () => {
         db.query("delete from public.transactions where id = $1 returning id", [ids.privateEntry]),
       ),
     ).rejects.toThrow(/permission denied/i);
+    await expect(
+      asUser(ids.employee, () => db.query("select public.delete_expense($1)", [ids.privateEntry])),
+    ).rejects.toThrow(/only executives/i);
+  });
+
+  it("restricts permanent deletion to expenses without granting direct DELETE", async () => {
+    const { rows: privileges } = await db.query<{
+      authenticated_can_execute: boolean;
+      anon_can_execute: boolean;
+      authenticated_can_delete: boolean;
+    }>(`select
+      has_function_privilege('authenticated', 'public.delete_expense(uuid)', 'EXECUTE')
+        as authenticated_can_execute,
+      has_function_privilege('anon', 'public.delete_expense(uuid)', 'EXECUTE')
+        as anon_can_execute,
+      has_table_privilege('authenticated', 'public.transactions', 'DELETE')
+        as authenticated_can_delete`);
+    expect(privileges[0]).toEqual({
+      authenticated_can_execute: true,
+      anon_can_execute: false,
+      authenticated_can_delete: false,
+    });
+
+    await expect(
+      asUser(ids.executive, () => db.query("select public.delete_expense($1)", [ids.sharedEntry])),
+    ).rejects.toThrow(/expense not found/i);
+    const { rows } = await db.query("select id from public.transactions where id = $1", [
+      ids.sharedEntry,
+    ]);
+    expect(rows).toHaveLength(1);
+  });
+
+  it("persists the expense deduction option and defaults legacy rows to enabled", async () => {
+    const { rows: legacy } = await db.query<{ deduct_from_agency_cut: boolean }>(
+      "select deduct_from_agency_cut from public.transactions where id = $1",
+      [ids.privateEntry],
+    );
+    expect(legacy[0]?.deduct_from_agency_cut).toBe(true);
+
+    const { rows } = await asUser(ids.executive, () =>
+      db.query<{ category: string; deduct_from_agency_cut: boolean }>(`
+        insert into public.transactions (kind, amount, category, deduct_from_agency_cut)
+        values ('expense', 10, 'deducted QA', true), ('expense', 5, 'non-deducted QA', false)
+        returning category, deduct_from_agency_cut
+      `),
+    );
+    expect(rows).toEqual([
+      { category: "deducted QA", deduct_from_agency_cut: true },
+      { category: "non-deducted QA", deduct_from_agency_cut: false },
+    ]);
+
+    const { rows: updated } = await asUser(ids.executive, () =>
+      db.query<{ deduct_from_agency_cut: boolean }>(
+        "update public.transactions set deduct_from_agency_cut = false where category = 'deducted QA' returning deduct_from_agency_cut",
+      ),
+    );
+    expect(updated[0]?.deduct_from_agency_cut).toBe(false);
   });
 
   it("exposes only explicitly shared entries to their creator account", async () => {

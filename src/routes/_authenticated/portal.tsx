@@ -51,7 +51,9 @@ function Portal() {
       (
         await supabase
           .from("transactions")
-          .select("kind,amount,currency,occurred_on,agency_share_pct,archived_at")
+          .select(
+            "kind,amount,currency,occurred_on,agency_share_pct,deduct_from_agency_cut,archived_at",
+          )
           .eq("creator_id", cid!)
           .eq("shared_with_creator", true)
       ).data ?? [],

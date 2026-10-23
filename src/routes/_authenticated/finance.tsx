@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
-import { ArchiveRestore, Pencil } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
@@ -20,6 +20,7 @@ import {
 } from "@/lib/finance";
 import { EmptyState, ErrorNote, Loading, PageHeader, Pill, Stat } from "@/components/portal";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -49,9 +50,9 @@ type Transaction = {
   description: string | null;
   creator_id: string | null;
   agency_share_pct: number | null;
+  deduct_from_agency_cut: boolean;
   external_ref: string | null;
   shared_with_creator: boolean;
-  archived_at: string | null;
   creators: { stage_name: string } | null;
 };
 
@@ -66,7 +67,6 @@ function Finance() {
   const [from, setFrom] = useState(new Date().getFullYear() + "-01-01");
   const [to, setTo] = useState("");
   const [creator, setCreator] = useState("all");
-  const [showArchived, setShowArchived] = useState(false);
   const [editing, setEditing] = useState<Transaction | null>(null);
 
   const txns = useQuery({
@@ -75,6 +75,7 @@ function Finance() {
       const { data, error } = await supabase
         .from("transactions")
         .select("*, creators(stage_name)")
+        .is("archived_at", null)
         .order("occurred_on", { ascending: false })
         .limit(1000);
       if (error) throw error;
@@ -92,35 +93,17 @@ function Finance() {
           .order("stage_name")
       ).data ?? [],
   });
-  const archive = useMutation({
-    mutationFn: async ({ id, on }: { id: string; on: boolean }) => {
-      const { data, error } = await supabase
-        .from("transactions")
-        .update({ archived_at: on ? new Date().toISOString() : null })
-        .eq("id", id)
-        .select("id");
+  const deleteExpense = useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase.rpc("delete_expense", { _id: id });
       if (error) throw error;
-      if (!data?.length) throw new Error("Transaction was not found or update was not authorized.");
+      if (!data) throw new Error("Expense was not found or deletion was not authorized.");
     },
-    onMutate: async ({ id, on }) => {
-      await qc.cancelQueries({ queryKey: ["transactions", "all"] });
-      const previous = qc.getQueryData<Transaction[]>(["transactions", "all"]);
-      qc.setQueryData<Transaction[]>(["transactions", "all"], (current) =>
-        current?.map((transaction) =>
-          transaction.id === id
-            ? { ...transaction, archived_at: on ? new Date().toISOString() : null }
-            : transaction,
-        ),
-      );
-      return { previous };
-    },
-    onError: (error, _variables, context) => {
-      if (context?.previous) qc.setQueryData(["transactions", "all"], context.previous);
+    onError: (error) => {
       toast.error((error as Error).message);
     },
+    onSuccess: () => toast.success("Expense permanently deleted"),
     onSettled: () => qc.invalidateQueries({ queryKey: ["transactions"] }),
-    onSuccess: (_data, variables) =>
-      toast.success(variables.on ? "Transaction voided" : "Transaction restored"),
   });
   const filtered = useMemo(
     () =>
@@ -132,12 +115,7 @@ function Finance() {
   const sums = summarize(filtered);
   const creatorBalances = summarizeCreatorBalances(filtered);
   const primary = sums[0]?.currency;
-  const chart = primary
-    ? monthly(
-        filtered.filter((t) => !t.archived_at),
-        primary,
-      )
-    : [];
+  const chart = primary ? monthly(filtered, primary) : [];
 
   if (!me?.isExec)
     return <EmptyState title="Restricted" body="Finance is limited to executives." />;
@@ -171,10 +149,6 @@ function Finance() {
             ))}
           </SelectContent>
         </Select>
-        <label className="flex items-center gap-2 text-sm">
-          <Switch checked={showArchived} onCheckedChange={setShowArchived} />
-          Show voided
-        </label>
       </div>
 
       {txns.isLoading ? (
@@ -199,7 +173,11 @@ function Finance() {
                 <Stat label="Creator balance" value={money(s.creatorBalance, s.currency)} />
                 <Stat label="Payouts" value={money(s.payouts, s.currency)} />
                 <Stat label="Agency share" value={money(s.agencyRevenue, s.currency)} />
-                <Stat label="Expenses" value={money(s.expenses, s.currency)} />
+                <Stat
+                  label="Expenses"
+                  value={money(s.expenses, s.currency)}
+                  hint={`${money(s.deductibleExpenses, s.currency)} deducted from agency cut`}
+                />
                 <Stat
                   label="Net profit"
                   value={<span className="text-gold">{money(s.netProfit, s.currency)}</span>}
@@ -270,58 +248,58 @@ function Finance() {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {filtered
-                  .filter((t) => showArchived || !t.archived_at)
-                  .map((t) => (
-                    <tr key={t.id} className={t.archived_at ? "opacity-50 line-through" : ""}>
-                      <td className="p-3">{t.occurred_on}</td>
-                      <td className="p-3">
-                        <Pill value={t.kind} />
-                      </td>
-                      <td className="p-3 text-muted-foreground">
-                        {t.category}
-                        {t.description ? ` · ${t.description}` : ""}
-                      </td>
-                      <td className="p-3 text-muted-foreground">
-                        {t.creators?.stage_name ?? "Agency"}
-                      </td>
-                      <td className="p-3 text-right font-medium">
-                        {money(Number(t.amount), t.currency)}
-                      </td>
-                      <td className="p-3 text-muted-foreground">
-                        {t.kind === "revenue" ? `${t.agency_share_pct ?? 100}%` : "—"}
-                      </td>
-                      <td className="p-3 text-right">
-                        {!t.archived_at && (
-                          <Button
-                            aria-label={`Edit ${t.category}`}
-                            title="Edit transaction"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setEditing(t)}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                        )}
+                {filtered.map((t) => (
+                  <tr key={t.id}>
+                    <td className="p-3">{t.occurred_on}</td>
+                    <td className="p-3">
+                      <Pill value={t.kind} />
+                    </td>
+                    <td className="p-3 text-muted-foreground">
+                      {t.category}
+                      {t.description ? ` · ${t.description}` : ""}
+                    </td>
+                    <td className="p-3 text-muted-foreground">
+                      {t.creators?.stage_name ?? "Agency"}
+                    </td>
+                    <td className="p-3 text-right font-medium">
+                      {money(Number(t.amount), t.currency)}
+                    </td>
+                    <td className="p-3 text-muted-foreground">
+                      {t.kind === "revenue" ? `${t.agency_share_pct ?? 100}%` : "—"}
+                    </td>
+                    <td className="p-3 text-right">
+                      <Button
+                        aria-label={`Edit ${t.category}`}
+                        title="Edit transaction"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setEditing(t)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      {t.kind === "expense" && (
                         <Button
-                          aria-label={
-                            t.archived_at ? `Restore ${t.category}` : `Void ${t.category}`
-                          }
-                          title={t.archived_at ? "Restore transaction" : "Void transaction"}
+                          aria-label={`Delete expense ${t.category}`}
+                          title="Permanently delete expense"
                           variant="ghost"
                           size="icon"
-                          disabled={archive.isPending}
+                          disabled={deleteExpense.isPending}
                           onClick={() => {
-                            const action = t.archived_at ? "Restore" : "Void";
-                            if (confirm(`${action} ${t.category}?`))
-                              archive.mutate({ id: t.id, on: !t.archived_at });
+                            if (
+                              confirm(
+                                `Permanently delete expense ${t.category}? This cannot be undone.`,
+                              )
+                            ) {
+                              deleteExpense.mutate(t.id);
+                            }
                           }}
                         >
-                          <ArchiveRestore className="h-4 w-4" />
+                          <Trash2 className="h-4 w-4" />
                         </Button>
-                      </td>
-                    </tr>
-                  ))}
+                      )}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -360,6 +338,7 @@ function NewTxn({
     creator_id: transaction?.creator_id ?? "none",
     agency_share_pct:
       transaction?.agency_share_pct == null ? "" : String(transaction.agency_share_pct),
+    deduct_from_agency_cut: transaction?.deduct_from_agency_cut ?? true,
     external_ref: transaction?.external_ref ?? "",
     shared_with_creator: transaction?.shared_with_creator ?? false,
   });
@@ -394,6 +373,7 @@ function NewTxn({
         description: f.description || null,
         creator_id: creatorId,
         agency_share_pct: transactionKind === "revenue" ? pct : null,
+        deduct_from_agency_cut: transactionKind === "expense" ? f.deduct_from_agency_cut : true,
         external_ref: f.external_ref.trim() || null,
         shared_with_creator: f.shared_with_creator,
       };
@@ -586,6 +566,20 @@ function NewTxn({
                 )}
               </p>
             </div>
+          )}
+          {f.kind === "expense" && (
+            <label className="sm:col-span-2 flex items-center gap-2 text-sm">
+              <Checkbox
+                checked={f.deduct_from_agency_cut}
+                onCheckedChange={(checked) =>
+                  setF((current) => ({
+                    ...current,
+                    deduct_from_agency_cut: checked === true,
+                  }))
+                }
+              />
+              Deduct from agency cut
+            </label>
           )}
           <div className="space-y-1">
             <Label>External reference</Label>

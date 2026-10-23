@@ -374,6 +374,7 @@ export type Database = {
           created_by: string | null;
           creator_id: string | null;
           currency: string;
+          deduct_from_agency_cut: boolean;
           description: string | null;
           external_ref: string | null;
           id: string;
@@ -391,6 +392,7 @@ export type Database = {
           created_by?: string | null;
           creator_id?: string | null;
           currency?: string;
+          deduct_from_agency_cut?: boolean;
           description?: string | null;
           external_ref?: string | null;
           id?: string;
@@ -408,6 +410,7 @@ export type Database = {
           created_by?: string | null;
           creator_id?: string | null;
           currency?: string;
+          deduct_from_agency_cut?: boolean;
           description?: string | null;
           external_ref?: string | null;
           id?: string;
@@ -493,6 +496,7 @@ export type Database = {
         };
         Returns: undefined;
       };
+      delete_expense: { Args: { _id: string }; Returns: string };
       executives_exist: { Args: never; Returns: boolean };
       has_area: {
         Args: { _area: Database["public"]["Enums"]["work_area"] };
