@@ -26,6 +26,17 @@ The browser application requires `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHA
 
 For schema migrations, Drizzle reads `LOVABLE_DB_MIGRATION_URL`. It is a privileged database credential: keep it out of source control and only point it at the explicitly verified target environment. The repository's checked-in `.env` is not a safe place for additional privileged credentials.
 
+## Vercel deployment
+
+Vercel builds use Nitro's `nodejs22.x` runtime. Configure these values for the Vercel environments that will run the app:
+
+- `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` are embedded in the browser build.
+- `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` are required at runtime by the authenticated payout server function. They must point to the same project as the browser values.
+- `VITE_SUPABASE_PROJECT_ID` is optional and is only used by project-aware tooling.
+- `VITE_APP_VERSION` is optional; the release workflow sets it from a release tag.
+
+The publishable key is intended for browser use; database access must remain protected by RLS. Never configure a service-role key as a `VITE_` variable. `LOVABLE_DB_MIGRATION_URL` is only for an explicitly controlled migration run, not a normal Vercel deployment.
+
 ## Checks
 
 ```sh
@@ -49,6 +60,9 @@ Migrations are in [`drizzle/migrations`](./drizzle/migrations). In particular:
 - `0010_team_member_removal.sql` adds membership revocation/removal protections and updates access policies.
 - `0011_creator_private_details.sql` moves internal creator notes and photo paths out of `creators`, then limits private-detail and task-comment reads to authorized staff.
 - `0012_task_returning_rls.sql` makes task reads evaluate the current row directly so authenticated inserts using `RETURNING` can pass the same visibility rules.
+- `0013_creator_payout_balance.sql` prevents payouts without a creator or beyond that creator's earned balance.
+- `0014_transactions_archive_only.sql` revokes transaction-row deletion from `authenticated`; ledger changes should use the archive/restore flow.
+- `0015_post_creator_payout.sql` adds the authenticated, Executive-only, idempotent payout RPC used by the Finance server function.
 
 Before applying migrations, identify the project from the connection target and inspect its migration journal. Do not assume a remote environment is staging, and do not blindly reapply `0009` or `0010`.
 

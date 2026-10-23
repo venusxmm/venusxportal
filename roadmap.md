@@ -1,4 +1,5 @@
 # V1 stabilization
+
 - [ ] Audit live schema, migration history, authorization and deployment.
 - [ ] Fix chronological task ordering, schedule completion and time-block/mobile layout; test.
 - [ ] Fix invitation clipboard handling and acceptance; verify email prerequisites.

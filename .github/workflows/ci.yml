@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run lint
+      - run: bunx tsc --noEmit
+      - run: bun run test
+      - run: bunx drizzle-kit check
+      - run: bun run build
+      - name: Build for Vercel
+        run: bun run build
+        env:
+          VERCEL: "1"
