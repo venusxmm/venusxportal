@@ -283,6 +283,7 @@ function Finance() {
                           title="Permanently delete expense"
                           variant="ghost"
                           size="icon"
+                          className="text-destructive hover:text-destructive"
                           disabled={deleteExpense.isPending}
                           onClick={() => {
                             if (
@@ -403,7 +404,7 @@ function NewTxn({
         ? await supabase.from("transactions").update(payload).eq("id", transaction.id).select("id")
         : await supabase.from("transactions").insert(payload).select("id");
       if (error)
-        throw error.message.includes("external_ref")
+        throw transactionKind !== "expense" && error.message.includes("external_ref")
           ? new Error("An entry with this reference already exists (duplicate import prevented).")
           : error;
       if (!data?.length)
