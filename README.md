@@ -82,4 +82,4 @@ Real-session testing is still needed for Employee and Creator accounts. The Clou
 
 ## Release status and known limitations
 
-The UI version fallback is currently `0.1.0`. The release workflow validates a semantic-version tag and runs checks/builds, but it does not publish a deployment; production publishing is performed through Lovable. A production release still requires real-session tests for all supported roles. No claim of V1.0.0 release readiness is made here.
+The official package version and UI fallback are `1.0.0`. The release workflow validates a semantic-version tag and runs checks/builds, but it does not publish a deployment; production publishing is performed through Lovable. A production release still requires real-session tests for all supported roles.

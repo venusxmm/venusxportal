@@ -93,16 +93,16 @@ function Finance() {
           .order("stage_name")
       ).data ?? [],
   });
-  const deleteExpense = useMutation({
+  const deleteTransaction = useMutation({
     mutationFn: async (id: string) => {
-      const { data, error } = await supabase.rpc("delete_expense", { _id: id });
+      const { data, error } = await supabase.rpc("delete_transaction", { _id: id });
       if (error) throw error;
-      if (!data) throw new Error("Expense was not found or deletion was not authorized.");
+      if (!data) throw new Error("Transaction was not found or deletion was not authorized.");
     },
     onError: (error) => {
       toast.error((error as Error).message);
     },
-    onSuccess: () => toast.success("Expense permanently deleted"),
+    onSuccess: () => toast.success("Transaction permanently deleted"),
     onSettled: () => qc.invalidateQueries({ queryKey: ["transactions"] }),
   });
   const filtered = useMemo(
@@ -277,27 +277,25 @@ function Finance() {
                       >
                         <Pencil className="h-4 w-4" />
                       </Button>
-                      {t.kind === "expense" && (
-                        <Button
-                          aria-label={`Delete expense ${t.category}`}
-                          title="Permanently delete expense"
-                          variant="ghost"
-                          size="icon"
-                          className="text-destructive hover:text-destructive"
-                          disabled={deleteExpense.isPending}
-                          onClick={() => {
-                            if (
-                              confirm(
-                                `Permanently delete expense ${t.category}? This cannot be undone.`,
-                              )
-                            ) {
-                              deleteExpense.mutate(t.id);
-                            }
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
+                      <Button
+                        aria-label={`Delete ${t.kind} ${t.category}`}
+                        title={`Permanently delete ${t.kind}`}
+                        variant="ghost"
+                        size="icon"
+                        className="text-destructive hover:text-destructive"
+                        disabled={deleteTransaction.isPending}
+                        onClick={() => {
+                          if (
+                            confirm(
+                              `Permanently delete ${t.kind} ${t.category}? This cannot be undone.`,
+                            )
+                          ) {
+                            deleteTransaction.mutate(t.id);
+                          }
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </td>
                   </tr>
                 ))}

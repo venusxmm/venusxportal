@@ -497,6 +497,7 @@ export type Database = {
         Returns: undefined;
       };
       delete_expense: { Args: { _id: string }; Returns: string };
+      delete_transaction: { Args: { _id: string }; Returns: string };
       executives_exist: { Args: never; Returns: boolean };
       has_area: {
         Args: { _area: Database["public"]["Enums"]["work_area"] };

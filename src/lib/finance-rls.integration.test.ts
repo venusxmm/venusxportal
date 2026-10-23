@@ -30,6 +30,10 @@ const expenseReferenceReuseMigration = readFileSync(
   resolve(process.cwd(), "drizzle/migrations/0017_expense_reference_reuse.sql"),
   "utf8",
 );
+const deleteAllTransactionsMigration = readFileSync(
+  resolve(process.cwd(), "drizzle/migrations/0018_delete_all_transactions.sql"),
+  "utf8",
+);
 const ids = {
   executive: "00000000-0000-0000-0000-000000000001",
   employee: "00000000-0000-0000-0000-000000000002",
@@ -177,6 +181,8 @@ describe("finance row-level security integration", () => {
     await db.exec(expenseAgencyCutAndDeleteMigration);
     await db.exec(expenseReferenceReuseMigration);
     await db.exec(expenseReferenceReuseMigration);
+    await db.exec(deleteAllTransactionsMigration);
+    await db.exec(deleteAllTransactionsMigration);
   });
 
   afterEach(async () => {
@@ -280,6 +286,102 @@ describe("finance row-level security integration", () => {
       ids.sharedEntry,
     ]);
     expect(rows).toHaveLength(1);
+  });
+
+  it("allows executives to physically delete each transaction kind while preserving audit", async () => {
+    const transactionIds = {
+      expense: "00000000-0000-0000-0000-000000000401",
+      revenue: "00000000-0000-0000-0000-000000000402",
+      payout: "00000000-0000-0000-0000-000000000403",
+    };
+    const { rows: privileges } = await db.query<{
+      authenticated_can_execute: boolean;
+      anon_can_execute: boolean;
+      authenticated_can_delete: boolean;
+    }>(`select
+      has_function_privilege('authenticated', 'public.delete_transaction(uuid)', 'EXECUTE')
+        as authenticated_can_execute,
+      has_function_privilege('anon', 'public.delete_transaction(uuid)', 'EXECUTE')
+        as anon_can_execute,
+      has_table_privilege('authenticated', 'public.transactions', 'DELETE')
+        as authenticated_can_delete`);
+    expect(privileges[0]).toEqual({
+      authenticated_can_execute: true,
+      anon_can_execute: false,
+      authenticated_can_delete: false,
+    });
+
+    await asUser(ids.executive, () =>
+      db.query(
+        `insert into public.transactions (id, kind, amount, category, creator_id)
+        values
+          ($1, 'expense', 5, 'synthetic expense', null),
+          ($2, 'revenue', 50, 'synthetic revenue', null),
+          ($3, 'payout', 2, 'synthetic payout', $4)`,
+        [transactionIds.expense, transactionIds.revenue, transactionIds.payout, ids.creatorAccount],
+      ),
+    );
+
+    await expect(
+      asUser(ids.employee, () =>
+        db.query("select public.delete_transaction($1)", [transactionIds.expense]),
+      ),
+    ).rejects.toThrow(/only executives/i);
+
+    for (const id of Object.values(transactionIds)) {
+      const { rows } = await asUser(ids.executive, () =>
+        db.query<{ delete_transaction: string }>("select public.delete_transaction($1)", [id]),
+      );
+      expect(rows[0]?.delete_transaction).toBe(id);
+    }
+
+    const { rows: remaining } = await db.query(
+      "select id from public.transactions where id = any($1::uuid[])",
+      [Object.values(transactionIds)],
+    );
+    expect(remaining).toHaveLength(0);
+
+    const { rows: auditRows } = await db.query<{ entity_id: string; action: string }>(
+      "select entity_id, action from public.audit_events where entity_id = any($1::uuid[]) order by entity_id, action",
+      [Object.values(transactionIds)],
+    );
+    expect(auditRows).toHaveLength(6);
+    expect(auditRows.filter((row) => row.action === "insert")).toHaveLength(3);
+    expect(auditRows.filter((row) => row.action === "delete")).toHaveLength(3);
+  });
+
+  it("prevents deleting revenue when it would invalidate an existing payout", async () => {
+    const revenueId = "00000000-0000-0000-0000-000000000411";
+    const payoutId = "00000000-0000-0000-0000-000000000412";
+    await asUser(ids.executive, () =>
+      db.query(
+        `insert into public.transactions
+          (id, kind, amount, category, creator_id, agency_share_pct)
+        values ($1, 'revenue', 10, 'synthetic revenue backing payout', $2, 60)`,
+        [revenueId, ids.creatorAccount],
+      ),
+    );
+    await asUser(ids.executive, () =>
+      db.query(
+        `insert into public.transactions (id, kind, amount, category, creator_id)
+        values ($1, 'payout', 24, 'synthetic settled payout', $2)`,
+        [payoutId, ids.creatorAccount],
+      ),
+    );
+
+    await expect(
+      asUser(ids.executive, () => db.query("select public.delete_transaction($1)", [revenueId])),
+    ).rejects.toThrow(/earned balance below zero/i);
+    const { rows: preservedRevenue } = await db.query(
+      "select id from public.transactions where id = $1",
+      [revenueId],
+    );
+    expect(preservedRevenue).toHaveLength(1);
+
+    await asUser(ids.executive, () => db.query("select public.delete_transaction($1)", [payoutId]));
+    await expect(
+      asUser(ids.executive, () => db.query("select public.delete_transaction($1)", [revenueId])),
+    ).resolves.toBeDefined();
   });
 
   it("persists the expense deduction option and defaults legacy rows to enabled", async () => {
