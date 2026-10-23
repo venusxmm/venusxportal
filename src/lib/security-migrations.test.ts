@@ -1,13 +1,55 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import type { Database } from "@/integrations/supabase/types";
 
 const migration = readFileSync(
   resolve(process.cwd(), "drizzle/migrations/0011_creator_private_details.sql"),
   "utf8",
 );
+const creatorDetailRoute = readFileSync(
+  resolve(process.cwd(), "src/routes/_authenticated/creators.$id.tsx"),
+  "utf8",
+);
+const creatorsListRoute = readFileSync(
+  resolve(process.cwd(), "src/routes/_authenticated/creators.index.tsx"),
+  "utf8",
+);
+const creatorDetailsQuery = creatorDetailRoute.match(
+  /\.from\("creators"\)\s*\.select\(([^)]*)\)/,
+)?.[1];
+const creatorsListQuery = creatorsListRoute.match(
+  /\.from\("creators"\)\s*\.select\(([^)]*)\)/,
+)?.[1];
+
+type Tables = Database["public"]["Tables"];
+type Assert<T extends true> = T;
+type PrivateFieldsAreTyped = Assert<
+  "internal_notes" | "internal_photo_path" extends keyof Tables["creator_private_details"]["Row"]
+    ? true
+    : false
+>;
+type PrivateFieldsAreNotCreatorColumns = Assert<
+  Extract<keyof Tables["creators"]["Row"], "internal_notes" | "internal_photo_path"> extends never
+    ? true
+    : false
+>;
+
+const privateFieldsAreTyped: PrivateFieldsAreTyped = true;
+const privateFieldsAreNotCreatorColumns: PrivateFieldsAreNotCreatorColumns = true;
 
 describe("creator privacy migration", () => {
+  it("keeps private creator fields in the typed private-details table", () => {
+    expect(privateFieldsAreTyped).toBe(true);
+    expect(privateFieldsAreNotCreatorColumns).toBe(true);
+    expect(creatorDetailRoute).toMatch(/from\("creator_private_details"\)/);
+    expect(creatorsListRoute).toMatch(/from\("creator_private_details"\)/);
+    expect(creatorDetailsQuery).toBeDefined();
+    expect(creatorsListQuery).toBeDefined();
+    expect(creatorDetailsQuery).not.toMatch(/internal_(?:notes|photo_path)/);
+    expect(creatorsListQuery).not.toMatch(/internal_(?:notes|photo_path)/);
+  });
+
   it("moves internal creator fields out of rows readable by creator accounts", () => {
     const tableLock = migration.indexOf("lock table public.creators in share row exclusive mode");
     expect(migration).toMatch(/create table if not exists public\.creator_private_details/i);
