@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { sendNativeInvitation } from "@/lib/invitations.functions";
 import { copyText } from "@/lib/clipboard";
 import { Copy } from "lucide-react";
 import { toast } from "sonner";
@@ -23,7 +25,14 @@ const ROLES: AppRole[] = ["executive", "employee", "creator", "partner"];
 const AREAS: readonly WorkArea[] = AREA_ORDER;
 
 export const Route = createFileRoute("/_authenticated/team")({
-  head: () => ({ meta: [{ title: "Team & Access — VenusX Portal" }] }),
+  head: () => ({ meta: [
+    { title: "Team & Access — VenusX Portal" },
+    { name: "description", content: "Manage VenusX members, roles and invitations." },
+    { property: "og:title", content: "Team & Access — VenusX Portal" },
+    { property: "og:description", content: "Manage VenusX members, roles and invitations." },
+    { property: "og:type", content: "website" },
+    { name: "twitter:card", content: "summary" },
+  ] }),
   component: Team,
 });
 
@@ -346,33 +355,16 @@ function InvitationPanel({
   const [role, setRole] = useState<AppRole>("employee");
   const [recoveryReason, setRecoveryReason] = useState("");
   const [busy, setBusy] = useState(false);
-  const [recentLinks, setRecentLinks] = useState<Record<string, string>>({});
+  const [recentLinks] = useState<Record<string, string>>({});
   const [recoveryBusyFor, setRecoveryBusyFor] = useState<string | null>(null);
   const [recoveryLinks, setRecoveryLinks] = useState<Record<string, string>>({});
+  const sendInvitation = useServerFn(sendNativeInvitation);
   const create = async () => {
     if (!email.trim()) return;
     setBusy(true);
     try {
-      const { token, hash } = await invitationToken();
-      const { data, error } = await supabase.rpc("create_invitation", {
-        _email: email.trim(),
-        _token_hash: hash,
-        _role: role,
-        _areas: [],
-      });
-      if (error) throw error;
-      const link = `${window.location.origin}/auth#invite=${token}`;
-      if (data && typeof data === "object" && "id" in data)
-        setRecentLinks((links) => ({
-          ...links,
-          [String(data["id"])]: link,
-        }));
-      const copied = await copyText(link);
-      toast.success(
-        copied
-          ? "Invitation created and link copied. Email not sent."
-          : "Invitation created. Select and copy the link below. Email not sent.",
-      );
+      await sendInvitation({ data: { email: email.trim(), role } });
+      toast.success("Invitation email requested. The member can set a password from the email link.");
       setEmail("");
       onChanged();
     } catch (error) {
@@ -429,7 +421,7 @@ function InvitationPanel({
     <section className="mt-6 rounded-lg border bg-card p-5">
       <h2 className="font-medium">Invitations</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        Email not configured: a verified sender domain is required.
+        New members receive an account invitation by email.
       </p>
       <div className="mt-4 flex flex-wrap items-end gap-2">
         <div className="min-w-0 basis-full flex-1 space-y-1 sm:basis-auto">
@@ -457,7 +449,7 @@ function InvitationPanel({
           </Select>
         </div>
         <Button disabled={busy || !email.trim()} onClick={create}>
-          Create link
+          Send invitation
         </Button>
       </div>
       <div className="mt-4 divide-y rounded-md border">

@@ -19,6 +19,7 @@
 - Creator invitations pin `invitations.creator_id`; verification/login recovers pending acceptance through an authenticated RPC, never by client-selected workspace IDs. Why: persist the original workspace across devices without restoring revoked access.
 - Auth email callbacks are public, validate provider identity, and return to sign-in after verification; the SDK processes implicit/PKCE links and token-hash links use verifyOtp. Why: keep verification separate from workspace navigation.
 - Native invite callbacks require provider link validation before password setup; recovery requires its own link evidence, and link verification is shared across remounts. Why: ordinary sessions must not authorize recovery and single-use tokens must not be exchanged twice.
+- Team invitation email uses an authenticated executive-only server function to register through existing RPCs before native Auth sending; failed sends revoke only that new invitation. Why: preserve workspace authorization while avoiding unusable pending invitations and exposing no admin credentials.
 - All ledger math goes through `src/lib/finance.ts` (`summarize`), per currency, in cents, excluding voided (`archived_at`) rows. Why: consistent, testable figures.
 - Ledger entries are voided (archived), never deleted; `external_ref` is unique to block duplicate imports. Why: traceability.
 - Automations insert with a unique `dedupe_key` + `on conflict do nothing` and log to `audit_events`. Why: idempotent retries.
