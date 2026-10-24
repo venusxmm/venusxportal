@@ -1,5 +1,12 @@
 # V1 stabilization
 
+## Focused native Auth invitation repair
+- [x] Add native invite link handling, shared verification and password setup returning to login.
+- [x] Reject ordinary recovery visits; validate recovery link before showing the form.
+- [x] Run focused tests and public browser checks; compare public Vercel bundles.
+- [ ] Verify full native invitation and password login: blocked by unavailable controlled QA mailbox/link and unidentified native email sender (Team currently creates copy-only links).
+- [ ] Verify production repair: blocked by required authorized Vercel deployment; no deployment performed.
+
 ## Current scope: Creator invitation repair
 - [ ] Inspect live invitation functions, auth settings, routes and migration history.
 - [ ] Bind invitations to existing creators and recover verified pending access safely.

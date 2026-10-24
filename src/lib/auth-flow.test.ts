@@ -2,7 +2,12 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@/integrations/supabase/client", () => ({ supabase: {} }));
+const auth = vi.hoisted(() => ({
+  verifyOtp: vi.fn().mockResolvedValue({ error: null }),
+  initialize: vi.fn().mockResolvedValue({ error: null }),
+  getUser: vi.fn().mockResolvedValue({ data: { user: { id: "qa", email_confirmed_at: "2026-10-24" } }, error: null }),
+}));
+vi.mock("@/integrations/supabase/client", () => ({ supabase: { auth } }));
 
 import {
   getInvitationToken,
@@ -11,9 +16,30 @@ import {
   normalizeEmailAddress,
   parseInvitationStatus,
   resolveWorkspaceRoute,
+  assertAuthLink,
+  verifyAuthLink,
 } from "@/lib/auth-flow";
 
 describe("invitation and authentication state helpers", () => {
+  it("rejects ordinary visits as recovery authorization even with an existing session", () => {
+    expect(() => assertAuthLink("", "", "recovery")).toThrow(/valid link/i);
+    expect(() => assertAuthLink("?type=invite&token_hash=qa", "", "recovery")).toThrow(/not valid/i);
+  });
+  it("rejects provider errors before any token exchange", () => {
+    expect(() => assertAuthLink("", "#error=access_denied&error_code=otp_expired", "invite")).toThrow(/expired/i);
+  });
+  it("shares one native invitation verification across concurrent mounts", async () => {
+    const first = verifyAuthLink("?type=invite&token_hash=qa-invite", "", "invite");
+    const second = verifyAuthLink("?type=invite&token_hash=qa-invite", "", "invite");
+    expect(first).toBe(second);
+    await Promise.all([first, second]);
+    expect(auth.verifyOtp).toHaveBeenCalledTimes(1);
+    expect(auth.verifyOtp).toHaveBeenCalledWith({ token_hash: "qa-invite", type: "invite" });
+  });
+  it("delegates valid implicit recovery links to the SDK without a second OTP exchange", async () => {
+    await verifyAuthLink("", "#type=recovery&access_token=qa&refresh_token=qa", "recovery");
+    expect(auth.initialize).toHaveBeenCalledTimes(1);
+  });
   it("reads invitation tokens from query strings and legacy URL fragments", () => {
     expect(getInvitationToken("?invite=query-token", "")).toBe("query-token");
     expect(getInvitationToken("", "#invite=fragment-token")).toBe("fragment-token");

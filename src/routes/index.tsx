@@ -9,6 +9,8 @@ export const Route = createFileRoute("/")({
         content: "Sign in to the VenusX Portal for executives, team members and creators.",
       },
       { property: "og:title", content: "VenusX Portal" },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
       {
         property: "og:description",
         content: "The unified operating system for the VenusX agency.",

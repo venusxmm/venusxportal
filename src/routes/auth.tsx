@@ -54,6 +54,10 @@ function AuthPage() {
       const hash = window.location.hash;
       const token = getInvitationToken(search, hash);
       const params = authLinkParameters(search, hash);
+      if (params.get("type") === "invite" || params.get("type") === "recovery") {
+        window.location.replace((params.get("type") === "invite" ? "/auth/callback" : "/reset-password") + search + hash);
+        return;
+      }
       if (params.get("setup") === "1" && active) {
         setNotice("Your password is set. Sign in to continue.");
       }
