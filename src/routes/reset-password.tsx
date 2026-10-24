@@ -62,7 +62,7 @@ function ResetPassword() {
       toast.success("Password updated");
       const { error: signOutError } = await supabase.auth.signOut({ scope: "local" });
       if (signOutError) throw signOutError;
-      navigate({ to: "/auth", search: { setup: "1" }, replace: true });
+      window.location.replace("/auth?setup=1");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not update password.");
     } finally {
