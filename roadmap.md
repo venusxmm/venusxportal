@@ -1,5 +1,10 @@
 # V1 stabilization
 
+## Explicit access recovery removal
+- [x] Remove recovery section, removed-member category, handlers, state and obsolete copy controls.
+- [x] Disable legacy recovery creation and acceptance; prevent profile/role-based restoration without deleting business data.
+- [x] Run focused isolated revocation, membership-removal, invitation and password-reset checks (24 passed); no real-member mutations, emails or deployment.
+
 ## Focused native Auth invitation repair
 - [x] Connect Team & Access to executive-authorized native invitation email with fixed Vercel callback; no schema change.
 - [x] Add native invite link handling, shared verification and password setup returning to login.
