@@ -114,7 +114,9 @@ export async function authenticatedWorkspaceRoute(): Promise<WorkspaceRoute> {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError) throw userError;
   if (!userData.user) throw new Error("Sign in to continue.");
-  if (!userData.user.email_confirmed_at) throw new Error("Confirm your email address before continuing.");
+  if (!userData.user.email_confirmed_at) {
+    throw new Error("Confirm your email address before continuing.");
+  }
 
   const { error: pendingError } = await supabase.rpc("complete_pending_invitation");
   if (pendingError) throw pendingError;
@@ -129,7 +131,11 @@ export async function authenticatedWorkspaceRoute(): Promise<WorkspaceRoute> {
   if (roles.includes("creator")) {
     const { data: creatorId, error } = await supabase.rpc("resolve_creator_link");
     if (error) throw error;
-    if (!creatorId) throw new Error("Creator account has no valid workspace. Ask an Executive to review the association.");
+    if (!creatorId) {
+      throw new Error(
+        "Creator account has no valid workspace. Ask an Executive to review the association.",
+      );
+    }
   }
 
   return resolveWorkspaceRoute(roles);
@@ -142,7 +148,11 @@ export function authLinkParameters(search: string, hash: string) {
 }
 
 /** The SDK handles implicit and PKCE links; token_hash templates need verifyOtp. */
-export async function verifyAuthLink(search: string, hash: string, expected: "signup" | "recovery") {
+export async function verifyAuthLink(
+  search: string,
+  hash: string,
+  expected: "signup" | "recovery",
+) {
   const params = authLinkParameters(search, hash);
   if (params.has("error") || params.has("error_description")) {
     throw new Error("This authentication link is invalid or expired. Request a new link.");
@@ -161,7 +171,9 @@ export async function verifyAuthLink(search: string, hash: string, expected: "si
   }
   const { data, error } = await supabase.auth.getUser();
   if (error) throw error;
-  if (!data.user?.email_confirmed_at) throw new Error("Open a valid verification link from your email.");
+  if (!data.user?.email_confirmed_at) {
+    throw new Error("Open a valid verification link from your email.");
+  }
   return data.user;
 }
 

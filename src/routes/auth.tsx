@@ -54,10 +54,15 @@ function AuthPage() {
       const hash = window.location.hash;
       const token = getInvitationToken(search, hash);
       const params = authLinkParameters(search, hash);
+      if (new URLSearchParams(search).get("verified") === "1" && active) {
+        setNotice("Email verified successfully. You can now sign in.");
+      }
       if (active) setInvite(token);
       try {
         if (params.has("error") || params.has("error_description")) {
-          throw new Error("This authentication link is invalid or expired. Request a new link or sign in.");
+          throw new Error(
+            "This authentication link is invalid or expired. Request a new link or sign in.",
+          );
         }
         // Support confirmation URLs sent before the dedicated callback existed.
         if (params.get("type") === "signup" || params.get("type") === "email") {
@@ -79,7 +84,13 @@ function AuthPage() {
           setMode(invitationInitialMode(status));
           setNotice(invitationStatusMessage(status));
           // Invalid invitation links never silently fall through into a workspace.
-          if (status.status === "invalid" || status.status === "expired" || status.status === "revoked") return;
+          if (
+            status.status === "invalid" ||
+            status.status === "expired" ||
+            status.status === "revoked"
+          ) {
+            return;
+          }
         }
         const { data, error } = await supabase.auth.getSession();
         if (error) throw error;
@@ -89,13 +100,19 @@ function AuthPage() {
           if (active) navigate({ to: route, replace: true });
         }
       } catch (error) {
-        if (active) setNotice(error instanceof Error ? error.message : "Could not complete sign-in. Please retry.");
+        if (active) {
+          setNotice(
+            error instanceof Error ? error.message : "Could not complete sign-in. Please retry.",
+          );
+        }
       } finally {
         if (active) setReady(true);
       }
     }
     void initialize();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [navigate, queryClient]);
 
   function confirmationRedirect() {
@@ -115,8 +132,12 @@ function AuthPage() {
       if (error) throw error;
       setNotice("Confirmation requested. Check your email for the new link.");
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Could not resend confirmation. Try again.");
-    } finally { setBusy(false); }
+      setNotice(
+        error instanceof Error ? error.message : "Could not resend confirmation. Try again.",
+      );
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function submit(event: React.FormEvent) {
@@ -140,7 +161,10 @@ function AuthPage() {
         if (error) throw error;
         setSent(true);
       } else if (mode === "in") {
-        const { error } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
+        const { error } = await supabase.auth.signInWithPassword({
+          email: normalizedEmail,
+          password,
+        });
         if (error) throw error;
         await completeInvitation(invite);
         const route = await authenticatedWorkspaceRoute();
@@ -150,19 +174,31 @@ function AuthPage() {
         if (password !== passwordConfirmation) throw new Error("Passwords do not match.");
         const freshStatus = invite ? await getInvitationStatus(invite) : null;
         if (invite && (freshStatus?.status !== "pending" || freshStatus.account_state !== "new")) {
-          if (freshStatus) { setInviteStatus(freshStatus); setMode("in"); }
-          throw new Error("This account already exists or the invitation is unavailable. Sign in or resend confirmation; your existing password will not be changed.");
+          if (freshStatus) {
+            setInviteStatus(freshStatus);
+            setMode("in");
+          }
+          throw new Error(
+            "This account already exists or the invitation is unavailable. Sign in or resend confirmation; your existing password will not be changed.",
+          );
         }
         const { data, error } = await supabase.auth.signUp({
-          email: normalizedEmail, password,
-          options: { emailRedirectTo: confirmationRedirect(), data: { full_name: name } },
+          email: normalizedEmail,
+          password,
+          options: {
+            emailRedirectTo: confirmationRedirect(),
+            data: { full_name: name },
+          },
         });
         if (error) throw error;
         if (!data.user || data.user.identities?.length === 0) {
-          throw new Error("Account setup could not be confirmed. Sign in or request a new confirmation link.");
+          throw new Error(
+            "Account setup could not be confirmed. Sign in or request a new confirmation link.",
+          );
         }
         if (data.session) {
-          await queryClient.cancelQueries(); queryClient.clear();
+          await queryClient.cancelQueries();
+          queryClient.clear();
           const { error: signOutError } = await supabase.auth.signOut();
           if (signOutError) throw signOutError;
           setMode("in");
@@ -183,7 +219,9 @@ function AuthPage() {
 
   const invitationAllowsSignup =
     !invite || (inviteStatus?.status === "pending" && inviteStatus.account_state === "new");
-  const invitationBlocked = Boolean(invite && (!inviteStatus || ["invalid", "expired", "revoked"].includes(inviteStatus.status)));
+  const invitationBlocked = Boolean(
+    invite && (!inviteStatus || ["invalid", "expired", "revoked"].includes(inviteStatus.status)),
+  );
   const awaitingInvitationVerification =
     inviteStatus?.status === "pending" && inviteStatus.account_state === "unverified";
   const lockedEmail = Boolean(invite && inviteStatus?.status === "pending");
@@ -238,7 +276,14 @@ function AuthPage() {
                   ? "confirm your email and finish accepting the invitation."
                   : "confirm your email and finish signing up."}
             </p>
-            <Button variant="outline" className="w-full" onClick={() => { setSent(false); setMode("in"); }}>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => {
+                setSent(false);
+                setMode("in");
+              }}
+            >
               Back to sign in
             </Button>
           </div>
@@ -295,12 +340,23 @@ function AuthPage() {
               {mode === "up" && (
                 <div className="space-y-1">
                   <Label htmlFor="pw-confirm">Confirm password</Label>
-                  <Input id="pw-confirm" type="password" required autoComplete="new-password" value={passwordConfirmation} onChange={event => setPasswordConfirmation(event.target.value)} />
+                  <Input
+                    id="pw-confirm"
+                    type="password"
+                    required
+                    autoComplete="new-password"
+                    value={passwordConfirmation}
+                    onChange={(event) => setPasswordConfirmation(event.target.value)}
+                  />
                 </div>
               )}
               <Button
                 className="w-full"
-                disabled={busy || (mode !== "forgot" && invitationBlocked) || (mode === "up" && !invitationAllowsSignup)}
+                disabled={
+                  busy ||
+                  (mode !== "forgot" && invitationBlocked) ||
+                  (mode === "up" && !invitationAllowsSignup)
+                }
               >
                 {busy
                   ? "Please wait…"
