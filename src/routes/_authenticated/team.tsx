@@ -3,8 +3,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { sendNativeInvitation } from "@/lib/invitations.functions";
-import { copyText } from "@/lib/clipboard";
-import { Copy } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { AREA_LABEL, AREA_ORDER, useMe, type AppRole, type WorkArea } from "@/lib/me";
@@ -226,7 +224,7 @@ function Team() {
                         <Checkbox
                           aria-label={`${r} for ${p.email}`}
                           checked={has(r)}
-                          disabled={p.id === me.id && r === "executive"}
+                          disabled={accessRevoked || (p.id === me.id && r === "executive")}
                           onCheckedChange={(v) =>
                             toggleRole.mutate({ uid: p.id, role: r, on: !!v })
                           }
@@ -239,6 +237,7 @@ function Team() {
                           {AREAS.map((a) => (
                             <label key={a} className="flex items-center gap-1 text-xs">
                               <Checkbox
+                                disabled={accessRevoked}
                                 checked={d.areas.some((x) => x.user_id === p.id && x.area === a)}
                                 onCheckedChange={(v) =>
                                   toggleArea.mutate({ uid: p.id, area: a, on: !!v })
@@ -263,7 +262,7 @@ function Team() {
                           disabled={removeAccess.isPending}
                           onClick={() =>
                             confirm(
-                              `Revoke access for ${p.full_name || p.email}? Their profile will remain available for a future invitation.`,
+                              `Revoke access for ${p.full_name || p.email}? Their business data will remain intact. This action disables effective access.`,
                             ) && removeAccess.mutate(p.id)
                           }
                         >
@@ -278,11 +277,11 @@ function Team() {
                           disabled={removeMember.isPending}
                           onClick={() =>
                             confirm(
-                              `Remove ${p.nickname || p.full_name || p.email} from Team & Access? Their sign-in identity will remain for historical references, but without roles or work areas they will not have portal access. A new role grant or accepted invitation can restore membership.`,
+                              `Remove ${p.nickname || p.full_name || p.email} from Team & Access? Their sign-in identity will remain for historical references, but without roles or work areas they will not have portal access. Existing invitations and role grants cannot restore removed access.`,
                             ) && removeMember.mutate(p.id)
                           }
                         >
-                          Remove from team
+                          Remove from team permanently
                         </Button>
                       )}
                     </td>
@@ -294,17 +293,6 @@ function Team() {
       </div>
       <InvitationPanel
         invitations={invitations.data ?? []}
-        recoveryMembers={d.people
-          .filter((person) => person.access_revoked_at || person.membership_removed_at)
-          .map((person) => ({
-            id: person.id,
-            email: person.email,
-            name: person.nickname || person.full_name || person.email || "Member",
-            removed: Boolean(person.membership_removed_at),
-            hasResidualAccess:
-              d.roles.some((role) => role.user_id === person.id) ||
-              d.areas.some((area) => area.user_id === person.id),
-          }))}
         onChanged={() => qc.invalidateQueries({ queryKey: ["invitations"] })}
       />
       <p className="mt-4 text-xs text-muted-foreground">
@@ -315,23 +303,8 @@ function Team() {
   );
 }
 
-async function invitationToken() {
-  const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes);
-  const token = btoa(String.fromCharCode(...bytes))
-    .replaceAll("+", "-")
-    .replaceAll("/", "_")
-    .replaceAll("=", "");
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
-  const hash = Array.from(new Uint8Array(digest), (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("");
-  return { token, hash };
-}
-
 function InvitationPanel({
   invitations,
-  recoveryMembers,
   onChanged,
 }: {
   invitations: {
@@ -342,22 +315,11 @@ function InvitationPanel({
     accepted_at: string | null;
     revoked_at: string | null;
   }[];
-  recoveryMembers: {
-    id: string;
-    email: string | null;
-    name: string;
-    removed: boolean;
-    hasResidualAccess: boolean;
-  }[];
   onChanged: () => void;
 }) {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<AppRole>("employee");
-  const [recoveryReason, setRecoveryReason] = useState("");
   const [busy, setBusy] = useState(false);
-  const [recentLinks] = useState<Record<string, string>>({});
-  const [recoveryBusyFor, setRecoveryBusyFor] = useState<string | null>(null);
-  const [recoveryLinks, setRecoveryLinks] = useState<Record<string, string>>({});
   const sendInvitation = useServerFn(sendNativeInvitation);
   const create = async () => {
     if (!email.trim()) return;
@@ -379,42 +341,6 @@ function InvitationPanel({
     else {
       toast.success("Invitation revoked");
       onChanged();
-    }
-  };
-  const createRecoveryLink = async (member: (typeof recoveryMembers)[number]) => {
-    if (!member.email || member.hasResidualAccess || recoveryReason.trim().length < 10) return;
-    if (
-      !confirm(
-        `Create an explicit recovery invitation for ${member.email} as ${role}? Access remains blocked until this person accepts the link after confirming their email.`,
-      )
-    )
-      return;
-
-    setRecoveryBusyFor(member.id);
-    try {
-      const { token, hash } = await invitationToken();
-      const { error } = await supabase.rpc("create_recovery_invitation", {
-        _user_id: member.id,
-        _token_hash: hash,
-        _role: role,
-        _areas: [],
-        _reason: recoveryReason.trim(),
-      });
-      if (error) throw error;
-      const link = `${window.location.origin}/auth#invite=${token}`;
-      setRecoveryLinks((links) => ({ ...links, [member.id]: link }));
-      const copied = await copyText(link);
-      toast.success(
-        copied
-          ? "Recovery invitation created and link copied. Access remains blocked until acceptance."
-          : "Recovery invitation created. Copy the one-time link below. Access remains blocked until acceptance.",
-      );
-      setRecoveryReason("");
-      onChanged();
-    } catch (error) {
-      toast.error((error as Error).message);
-    } finally {
-      setRecoveryBusyFor(null);
     }
   };
   return (
@@ -469,38 +395,6 @@ function InvitationPanel({
                   expires {new Date(item.expires_at).toLocaleDateString()}
                 </span>
               </span>
-              {recentLinks[item.id] && (
-                <Input
-                  aria-label={`Invitation URL for ${item.email}`}
-                  className="min-w-0 basis-full font-mono text-xs"
-                  readOnly
-                  value={recentLinks[item.id]}
-                  onFocus={(event) => event.currentTarget.select()}
-                />
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={!recentLinks[item.id]}
-                title={
-                  recentLinks[item.id]
-                    ? "Copy invitation link"
-                    : "The link is only available immediately after creation"
-                }
-                onClick={() => {
-                  const link = recentLinks[item.id];
-                  if (link)
-                    void copyText(link).then((copied) =>
-                      toast[copied ? "success" : "error"](
-                        copied
-                          ? "Invitation link copied"
-                          : "Copy unavailable. Select the link below.",
-                      ),
-                    );
-                }}
-              >
-                <Copy className="mr-1 h-4 w-4" /> Copy link
-              </Button>
               <Button
                 variant="ghost"
                 size="sm"
@@ -512,88 +406,6 @@ function InvitationPanel({
             </div>
           ))}
       </div>
-      {recoveryMembers.length > 0 && (
-        <div className="mt-6 space-y-3 rounded-md border border-destructive/30 p-4">
-          <div>
-            <h3 className="font-medium">Explicit access recovery</h3>
-            <p className="text-sm text-muted-foreground">
-              A regular invitation cannot restore revoked access. A recovery invitation is audited
-              and restores access only after the matching account verifies its email and accepts.
-            </p>
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="recovery-reason">Reason for recovery</Label>
-            <Input
-              id="recovery-reason"
-              value={recoveryReason}
-              onChange={(event) => setRecoveryReason(event.target.value)}
-              placeholder="Document the administrator-approved reason (10–500 characters)"
-              maxLength={500}
-            />
-          </div>
-          <div className="divide-y rounded-md border">
-            {recoveryMembers.map((member) => (
-              <div key={member.id} className="flex flex-wrap items-center gap-3 p-3 text-sm">
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium">{member.name}</p>
-                  <p className="break-all text-xs text-muted-foreground">{member.email}</p>
-                  <p className="text-xs text-destructive">
-                    {member.removed ? "Removed from Team & Access" : "Access revoked"}
-                  </p>
-                  {member.hasResidualAccess && (
-                    <p className="text-xs text-destructive">
-                      Roles or work areas remain assigned; resolve this inconsistency first.
-                    </p>
-                  )}
-                </div>
-                {recoveryLinks[member.id] ? (
-                  <>
-                    <Input
-                      aria-label={`Recovery invitation URL for ${member.email}`}
-                      className="min-w-0 basis-full font-mono text-xs"
-                      readOnly
-                      value={recoveryLinks[member.id]}
-                      onFocus={(event) => event.currentTarget.select()}
-                    />
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() =>
-                        void copyText(recoveryLinks[member.id]!).then((copied) =>
-                          toast[copied ? "success" : "error"](
-                            copied ? "Recovery link copied" : "Copy unavailable. Select the link.",
-                          ),
-                        )
-                      }
-                    >
-                      <Copy className="mr-1 h-4 w-4" /> Copy link
-                    </Button>
-                  </>
-                ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={
-                      !member.email ||
-                      member.hasResidualAccess ||
-                      recoveryReason.trim().length < 10 ||
-                      recoveryBusyFor !== null
-                    }
-                    onClick={() => void createRecoveryLink(member)}
-                  >
-                    {recoveryBusyFor === member.id ? "Creating…" : "Create recovery link"}
-                  </Button>
-                )}
-              </div>
-            ))}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Recovery does not restore previous roles or work areas. The selected role is granted
-            only when the invitation is accepted. A removed member is shown separately from active
-            Team & Access members.
-          </p>
-        </div>
-      )}
     </section>
   );
 }
