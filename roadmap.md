@@ -1,9 +1,10 @@
 # V1 stabilization
 
 ## Current targeted connection repair
-- [ ] Trace invitation middleware environment failure and restore the existing runtime binding.
-- [ ] Verify authenticated Team & Access backend reachability without sending email or changing members.
-- [ ] Run focused invitation, revocation/removal and password-reset checks; report real-email blockers.
+- [x] Trace invitation middleware environment failure and restore the existing runtime binding (managed key was stale; canonical bindings refreshed).
+- [x] Verify authenticated Team & Access backend reachability: missing Creator validation returned through the actual invitation server function; no email or record created.
+- [x] Run 24 focused invitation, revocation/removal and password-reset tests; browser confirms recovery UI absent and password form requires a recovery link.
+- [ ] Complete real invitation/password/login/workspace E2E: blocked by no existing QA identity/mailbox and no authorization to send email or mutate real members.
 
 ## Explicit access recovery removal
 - [x] Remove recovery section, removed-member category, handlers, state and obsolete copy controls.
