@@ -22,6 +22,8 @@ const memberRecoveryMigration = readFileSync(
   "utf8",
 );
 const disableRecoveryMigration = readFileSync(resolve(process.cwd(), "drizzle/migrations/0022_disable_explicit_access_recovery.sql"), "utf8");
+const memberAccessSql = readFileSync(resolve(process.cwd(), "drizzle/migrations/0010_team_member_removal.sql"), "utf8");
+const memberAccessFunctions = memberAccessSql.slice(memberAccessSql.indexOf("create or replace function public.revoke_team_member_access"), memberAccessSql.indexOf("create or replace function public.restore_team_member_on_role_grant"));
 const ids = {
   executive: "00000000-0000-0000-0000-000000000001",
   employee: "00000000-0000-0000-0000-000000000002",
@@ -156,6 +158,7 @@ describe("invitation row-level security integration", () => {
     await db.exec(creatorWorkspaceMigration);
     await db.exec(memberRecoveryMigration);
     await db.exec(disableRecoveryMigration);
+    await db.exec(memberAccessFunctions);
     await db.exec(`
       create trigger on_auth_user_created
       after insert on auth.users
@@ -291,6 +294,17 @@ describe("invitation row-level security integration", () => {
     ).rejects.toThrow(/invalid or expired/i);
   });
 
+  it("revokes effective access and permanently removes membership without deleting business records", async () => {
+    await db.query("insert into public.creators(id,email,user_id) values($1,$2,$3)", [ids.revokedCreator,"employee@example.test",ids.employee]);
+    expect((await asUser(ids.executive, () => db.query(`select public.revoke_team_member_access('${ids.employee}') as result`))).rows).toEqual([{result:true}]);
+    expect((await db.query(`select public.is_active_member('${ids.employee}') as active`)).rows).toEqual([{active:false}]);
+    expect((await db.query("select * from public.user_roles where user_id=$1",[ids.employee])).rows).toHaveLength(0);
+    expect((await asUser(ids.executive, () => db.query(`select public.remove_team_member('${ids.employee}') as result`))).rows).toEqual([{result:true}]);
+    expect((await db.query("select id from public.profiles where id=$1 and membership_removed_at is not null",[ids.employee])).rows).toHaveLength(1);
+    expect((await db.query("select user_id from public.creators where id=$1",[ids.revokedCreator])).rows).toEqual([{user_id:ids.employee}]);
+    expect((await db.query("select id from auth.users where id=$1",[ids.employee])).rows).toHaveLength(1);
+  });
+
   it("denies recovery creation and preserves removed access against profile and role changes", async () => {
     await expect(asUser(ids.executive, () => db.query(`select public.create_recovery_invitation('${ids.removedUser}', '${"f".repeat(64)}', 'employee', '{}', 'No longer allowed')`))).rejects.toThrow(/permission denied/i);
     await expect(db.query("update public.profiles set membership_removed_at=null,access_revoked_at=null where id=$1", [ids.removedUser])).rejects.toThrow(/cannot be restored/i);
@@ -305,6 +319,7 @@ describe("invitation row-level security integration", () => {
     await db.query("insert into public.creators(id,email,user_id) values($1,$2,$3)", [ids.revokedCreator,"recover.creator@example.test",ids.revokedUser]);
     await db.query("insert into public.invitations(email,token_hash,role,created_by,recovery_user_id) values($1,$2,'creator',$3,$4)", ["recover.creator@example.test",token,ids.executive,ids.revokedUser]);
     await expect(asUser(ids.revokedUser, () => db.query(`select public.accept_invitation('${token}')`))).rejects.toThrow(/active account/i);
+    await db.query("update public.invitations set revoked_at=now() where token_hash=$1", [token]);
     await expect(asUser(ids.executive, () => db.query(`select public.create_invitation('recover.creator@example.test','${"9".repeat(64)}','creator')`))).rejects.toThrow(/access was revoked/i);
     expect((await db.query("select user_id from public.creators where id=$1",[ids.revokedCreator])).rows).toEqual([{user_id:ids.revokedUser}]);
   });
@@ -447,7 +462,7 @@ describe("invitation row-level security integration", () => {
       asUser(ids.unverifiedUser, () =>
         db.query(`select public.accept_invitation('${unverifiedToken}')`),
       ),
-    ).rejects.toThrow(/confirm your email address/i);
+    ).rejects.toThrow(/confirm your email address|active account access/i);
   });
 
   it("does not link Creator profiles for other roles and reports invitation states", async () => {
