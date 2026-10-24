@@ -17,6 +17,13 @@ function Dashboard() {
   if (!me) return <Loading />;
   if (me.roles.length === 0) return <Setup />;
   if (!me.isStaff && me.isCreator) return <CreatorRedirect />;
+  if (!me.isStaff && me.roles.includes("partner"))
+    return (
+      <EmptyState
+        title="Partner workspace is not available yet"
+        body="Partner access is reserved. Ask an Executive if you believe you received this role by mistake."
+      />
+    );
   return <StaffOverview />;
 }
 

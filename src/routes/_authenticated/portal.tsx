@@ -75,7 +75,7 @@ function Portal() {
     return (
       <EmptyState
         title="No creator profile linked"
-        body="Ask the agency to add your email to your creator profile."
+        body="If you accepted a Creator invitation, confirm that your email is verified and matches one active Creator profile. Otherwise, ask an Executive to verify the Creator email and invitation. Access is not granted until the association is confirmed."
       />
     );
   const ts = tasks.data ?? [];

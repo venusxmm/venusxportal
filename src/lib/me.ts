@@ -20,7 +20,8 @@ export interface Me {
 export const meQuery = queryOptions({
   queryKey: ["me"],
   queryFn: async (): Promise<Me | null> => {
-    const { data: u } = await supabase.auth.getUser();
+    const { data: u, error: userError } = await supabase.auth.getUser();
+    if (userError) throw userError;
     if (!u.user) return null;
     const { data: active, error: activeError } = await supabase.rpc("is_active_member", {
       _user_id: u.user.id,
@@ -41,14 +42,26 @@ export const meQuery = queryOptions({
         .maybeSingle(),
       supabase.from("creators").select("id").eq("user_id", u.user.id).maybeSingle(),
     ]);
-    const r = (roles.data ?? []).map((x) => x.role);
+    if (roles.error) throw roles.error;
+    if (areas.error) throw areas.error;
+    if (profile.error) throw profile.error;
+    if (creator.error) throw creator.error;
+
+    const r = roles.data.map((x) => x.role);
+    let creatorId = creator.data?.id ?? null;
+    if (r.includes("creator")) {
+      const { data, error } = await supabase.rpc("resolve_creator_link");
+      if (error) throw error;
+      creatorId = data ?? creatorId;
+    }
+
     return {
       id: u.user.id,
       email: u.user.email ?? null,
       name: profile.data?.nickname ?? profile.data?.full_name ?? null,
       roles: r,
-      areas: (areas.data ?? []).map((x) => x.area),
-      creatorId: creator.data?.id ?? null,
+      areas: areas.data.map((x) => x.area),
+      creatorId,
       isExec: r.includes("executive"),
       isStaff: r.includes("executive") || r.includes("employee"),
       isCreator: r.includes("creator"),

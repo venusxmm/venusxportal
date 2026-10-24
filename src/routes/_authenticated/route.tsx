@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Menu, Settings, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useMe, type Me } from "@/lib/me";
-import { Loading } from "@/components/portal";
+import { EmptyState, Loading } from "@/components/portal";
 import { cn } from "@/lib/utils";
 import { APP_VERSION_LABEL } from "@/lib/version";
 
@@ -50,7 +50,7 @@ const NAV: NavItem[] = [
 ];
 
 function Shell() {
-  const { data: me, isLoading } = useMe();
+  const { data: me, isLoading, error } = useMe();
   const [open, setOpen] = useState(false);
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -62,7 +62,15 @@ function Shell() {
     navigate({ to: "/auth", replace: true });
   }
 
-  if (isLoading || !me) return <Loading />;
+  if (isLoading) return <Loading />;
+  if (error)
+    return (
+      <EmptyState
+        title="Account access could not be resolved"
+        body={`${error.message} If the issue continues, ask an Executive to review your account and Creator invitation.`}
+      />
+    );
+  if (!me) return <Loading />;
   const items = NAV.filter((n) => n.show(me));
 
   const nav = (
