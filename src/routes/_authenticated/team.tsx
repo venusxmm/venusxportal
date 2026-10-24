@@ -355,7 +355,7 @@ function InvitationPanel({
   const [role, setRole] = useState<AppRole>("employee");
   const [recoveryReason, setRecoveryReason] = useState("");
   const [busy, setBusy] = useState(false);
-  const [recentLinks, setRecentLinks] = useState<Record<string, string>>({});
+  const [recentLinks] = useState<Record<string, string>>({});
   const [recoveryBusyFor, setRecoveryBusyFor] = useState<string | null>(null);
   const [recoveryLinks, setRecoveryLinks] = useState<Record<string, string>>({});
   const sendInvitation = useServerFn(sendNativeInvitation);
