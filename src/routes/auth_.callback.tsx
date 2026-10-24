@@ -28,10 +28,15 @@ function AuthCallbackPage() {
       try {
         const params = new URLSearchParams(window.location.search);
         const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-        const error = params.get("error_description") ?? params.get("error") ??
-          hash.get("error_description") ?? hash.get("error");
+        const error =
+          params.get("error_description") ??
+          params.get("error") ??
+          hash.get("error_description") ??
+          hash.get("error");
         if (error) {
-          throw new Error("This verification link is invalid or expired. Return to sign in and request a new confirmation email.");
+          throw new Error(
+            "This verification link is invalid or expired. Return to sign in and request a new confirmation email.",
+          );
         }
 
         await verifyAuthLink(window.location.search, window.location.hash, "signup");
