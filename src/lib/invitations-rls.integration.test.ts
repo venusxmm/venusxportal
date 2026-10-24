@@ -227,6 +227,41 @@ describe("invitation row-level security integration", () => {
     expect(acceptedAgain.rows[0]?.accept_invitation).toBe(true);
   });
 
+  it("supports Executive and Partner invitations for an existing identity without duplicating its profile", async () => {
+    const existingUser = "00000000-0000-0000-0000-00000000000c";
+    await db.query(
+      `insert into auth.users (id, email, email_confirmed_at)
+       values ($1, 'existing.roles@example.test', now())`,
+      [existingUser],
+    );
+
+    for (const [role, token] of [
+      ["executive", "7".repeat(64)],
+      ["partner", "8".repeat(64)],
+    ] as const) {
+      await asUser(ids.executive, () =>
+        db.query(
+          `select public.create_invitation('existing.roles@example.test', '${token}', '${role}')`,
+        ),
+      );
+      const accepted = await asUser(existingUser, () =>
+        db.query<{ accept_invitation: boolean }>(`select public.accept_invitation('${token}')`),
+      );
+      expect(accepted.rows[0]?.accept_invitation).toBe(true);
+    }
+
+    const roles = await db.query<{ role: string }>(
+      "select role from public.user_roles where user_id = $1 order by role",
+      [existingUser],
+    );
+    expect(roles.rows).toEqual([{ role: "executive" }, { role: "partner" }]);
+    const profiles = await db.query<{ count: string }>(
+      "select count(*)::text as count from public.profiles where id = $1",
+      [existingUser],
+    );
+    expect(profiles.rows).toEqual([{ count: "1" }]);
+  });
+
   it("rejects expired and malformed invitation tokens", async () => {
     await db.query(
       `insert into public.invitations (email, token_hash, role, expires_at, created_by)
