@@ -205,6 +205,14 @@ describe("invitation row-level security integration", () => {
       ["c".repeat(64), ids.executive],
     );
 
+    const expiredStatus = await db.query<{
+      get_invitation_status: { status: string; account_state: string };
+    }>(`select public.get_invitation_status('${"c".repeat(64)}')`);
+    expect(expiredStatus.rows[0]?.get_invitation_status).toMatchObject({
+      status: "expired",
+      account_state: "verified",
+    });
+
     await expect(
       asUser(ids.invitedUser, () =>
         db.query(`select public.accept_invitation('${"d".repeat(64)}')`),
@@ -235,6 +243,10 @@ describe("invitation row-level security integration", () => {
       db.query<{ revoke_invitation: boolean }>("select public.revoke_invitation($1)", [inviteId]),
     );
     expect(revoked.rows[0]?.revoke_invitation).toBe(true);
+    const revokedStatus = await db.query<{ get_invitation_status: { status: string } }>(
+      `select public.get_invitation_status('${validToken}')`,
+    );
+    expect(revokedStatus.rows[0]?.get_invitation_status.status).toBe("revoked");
     await expect(
       asUser(ids.invitedUser, () =>
         db.query<{ accept_invitation: boolean }>(
@@ -253,6 +265,10 @@ describe("invitation row-level security integration", () => {
        values ($1, $2, now())`,
       [ids.creatorUser, spacedEmail],
     );
+    const beforeAccept = await db.query<{ user_id: string | null }>(
+      "select user_id from public.creators",
+    );
+    expect(beforeAccept.rows).toEqual([{ user_id: null }]);
     await asUser(ids.executive, () =>
       db.query(
         `select public.create_invitation(E'\\t creator@example.test \\n', '${token}', 'creator')`,
@@ -277,6 +293,10 @@ describe("invitation row-level security integration", () => {
       db.query<{ accept_invitation: boolean }>(`select public.accept_invitation('${token}')`),
     );
     expect(repeatedAcceptance.rows[0]?.accept_invitation).toBe(true);
+    const acceptedStatus = await db.query<{ get_invitation_status: { status: string } }>(
+      `select public.get_invitation_status('${token}')`,
+    );
+    expect(acceptedStatus.rows[0]?.get_invitation_status.status).toBe("accepted");
   });
 
   it("does not claim a Creator linked to another user or grant the invited role", async () => {
@@ -366,6 +386,7 @@ describe("invitation row-level security integration", () => {
       `select public.get_invitation_status('${token}')`,
     );
     expect(status.rows[0]?.get_invitation_status.status).toBe("pending");
+    expect(status.rows[0]?.get_invitation_status).toHaveProperty("account_state", "verified");
 
     await asUser(ids.employee, () => db.query(`select public.accept_invitation('${token}')`));
     const resolved = await asUser(ids.employee, () =>
