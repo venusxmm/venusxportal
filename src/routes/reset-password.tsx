@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { authenticatedWorkspaceRoute } from "@/lib/auth-flow";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,15 +25,37 @@ function ResetPassword() {
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
   const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
+    let active = true;
     const { data } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") setReady(true);
+      if (active && (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN")) setReady(true);
     });
-    supabase.auth.getSession().then(({ data: s }) => {
-      if (s.session) setReady(true);
-    });
-    return () => data.subscription.unsubscribe();
+    supabase.auth
+      .getSession()
+      .then(({ data: sessionData, error }) => {
+        if (!active) return;
+        if (error) throw error;
+        if (sessionData.session) setReady(true);
+        else
+          setNotice(
+            "Open this page from a valid password reset link. Request a new link if it expired.",
+          );
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        setNotice(
+          error instanceof Error ? error.message : "We could not validate this password link.",
+        );
+      })
+      .finally(() => {
+        if (active) setReady(true);
+      });
+    return () => {
+      active = false;
+      data.subscription.unsubscribe();
+    };
   }, []);
 
   async function submit(e: React.FormEvent) {
@@ -42,20 +65,24 @@ function ResetPassword() {
       return;
     }
     setBusy(true);
-    const { error } = await supabase.auth.updateUser({ password: pw });
-    setBusy(false);
-    if (error) {
-      toast.error(error.message);
-      return;
+    try {
+      const { error } = await supabase.auth.updateUser({ password: pw });
+      if (error) throw error;
+      toast.success("Password updated");
+      const route = await authenticatedWorkspaceRoute();
+      navigate({ to: route, replace: true });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not update password.");
+    } finally {
+      setBusy(false);
     }
-    toast.success("Password updated");
-    navigate({ to: "/dashboard", replace: true });
   }
 
   return (
     <main className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm rounded-lg border bg-card p-6">
         <h1 className="mb-4 text-xl font-semibold">Choose a new password</h1>
+        {notice && <p className="mb-4 text-sm text-muted-foreground">{notice}</p>}
         {!ready ? (
           <p className="text-sm text-muted-foreground">
             Open this page from the reset link in your email. If the link expired, request a new one

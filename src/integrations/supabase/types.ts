@@ -477,6 +477,7 @@ export type Database = {
     };
     Functions: {
       accept_invitation: { Args: { _token_hash: string }; Returns: boolean };
+      get_invitation_status: { Args: { _token_hash: string }; Returns: Json };
       can_access_creator: { Args: { _creator_id: string }; Returns: boolean };
       can_see_task: { Args: { _task_id: string }; Returns: boolean };
       claim_first_executive: { Args: never; Returns: boolean };
@@ -514,6 +515,7 @@ export type Database = {
       is_executive: { Args: never; Returns: boolean };
       is_own_creator: { Args: { _creator_id: string }; Returns: boolean };
       remove_team_member: { Args: { _user_id: string }; Returns: boolean };
+      resolve_creator_link: { Args: never; Returns: string | null };
       revoke_invitation: { Args: { _id: string }; Returns: boolean };
       revoke_team_member_access: {
         Args: { _user_id: string };
