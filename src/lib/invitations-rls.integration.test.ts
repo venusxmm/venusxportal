@@ -21,6 +21,7 @@ const memberRecoveryMigration = readFileSync(
   resolve(process.cwd(), "drizzle/migrations/0021_explicit_member_recovery.sql"),
   "utf8",
 );
+const disableRecoveryMigration = readFileSync(resolve(process.cwd(), "drizzle/migrations/0022_disable_explicit_access_recovery.sql"), "utf8");
 const ids = {
   executive: "00000000-0000-0000-0000-000000000001",
   employee: "00000000-0000-0000-0000-000000000002",
@@ -154,6 +155,7 @@ describe("invitation row-level security integration", () => {
     await db.exec(creatorAuthMigration);
     await db.exec(creatorWorkspaceMigration);
     await db.exec(memberRecoveryMigration);
+    await db.exec(disableRecoveryMigration);
     await db.exec(`
       create trigger on_auth_user_created
       after insert on auth.users
@@ -289,132 +291,22 @@ describe("invitation row-level security integration", () => {
     ).rejects.toThrow(/invalid or expired/i);
   });
 
-  it("keeps ordinary invitations from restoring revoked accounts and supports audited, explicit recovery", async () => {
-    const recoveryToken = "e".repeat(64);
-    await db.query("insert into public.creators (id, email, user_id) values ($1, $2, $3)", [
-      ids.revokedCreator,
-      "recover.creator@example.test",
-      ids.revokedUser,
-    ]);
-    await expect(
-      asUser(ids.executive, () =>
-        db.query(
-          `select public.create_invitation(
-            'recover.creator@example.test', '${recoveryToken}', 'creator'
-          )`,
-        ),
-      ),
-    ).rejects.toThrow(/access was revoked/i);
-
-    await expect(
-      asUser(ids.employee, () =>
-        db.query(
-          `select public.create_recovery_invitation(
-            '${ids.revokedUser}', '${recoveryToken}', 'creator', '{}', 'Restore approved Creator access'
-          )`,
-        ),
-      ),
-    ).rejects.toThrow(/only executives/i);
-
-    await expect(
-      asUser(ids.executive, () =>
-        db.query(
-          `select public.create_recovery_invitation(
-            '${ids.revokedUser}', '${"9".repeat(64)}', 'employee', '{}', 'Restore approved employee access'
-          )`,
-        ),
-      ),
-    ).rejects.toThrow(/only be recovered with the creator role/i);
-
-    await asUser(ids.executive, () =>
-      db.query(
-        `select public.create_recovery_invitation(
-          '${ids.revokedUser}', '${recoveryToken}', 'creator', '{}', 'Restore approved Creator access'
-        )`,
-      ),
-    );
-
-    await db.query("update auth.users set email = 'recover.creator@example.test' where id = $1", [
-      ids.wrongUser,
-    ]);
-    await expect(
-      asUser(ids.wrongUser, () => db.query(`select public.accept_invitation('${recoveryToken}')`)),
-    ).rejects.toThrow(/belongs to another account/i);
-
-    const accepted = await asUser(ids.revokedUser, () =>
-      db.query<{ accept_invitation: boolean }>(
-        `select public.accept_invitation('${recoveryToken}')`,
-      ),
-    );
-    expect(accepted.rows[0]?.accept_invitation).toBe(true);
-
-    const recovered = await db.query<{
-      access_revoked_at: string | null;
-      membership_removed_at: string | null;
-    }>("select access_revoked_at, membership_removed_at from public.profiles where id = $1", [
-      ids.revokedUser,
-    ]);
-    expect(recovered.rows[0]).toEqual({
-      access_revoked_at: null,
-      membership_removed_at: null,
-    });
-
-    const linkage = await db.query<{ user_id: string | null; role: string }>(
-      `select c.user_id, r.role
-       from public.creators c
-       join public.user_roles r on r.user_id = c.user_id
-       where c.id = $1`,
-      [ids.revokedCreator],
-    );
-    expect(linkage.rows).toEqual([{ user_id: ids.revokedUser, role: "creator" }]);
-
-    const audit = await db.query<{ action: string }>(
-      "select action from public.audit_events where entity_id = (select id from public.invitations where token_hash = $1) order by action",
-      [recoveryToken],
-    );
-    expect(audit.rows.map((row) => row.action)).toEqual([
-      "accept_recovery_invitation",
-      "create_recovery_invitation",
-    ]);
+  it("denies recovery creation and preserves removed access against profile and role changes", async () => {
+    await expect(asUser(ids.executive, () => db.query(`select public.create_recovery_invitation('${ids.removedUser}', '${"f".repeat(64)}', 'employee', '{}', 'No longer allowed')`))).rejects.toThrow(/permission denied/i);
+    await expect(db.query("update public.profiles set membership_removed_at=null,access_revoked_at=null where id=$1", [ids.removedUser])).rejects.toThrow(/cannot be restored/i);
+    await db.exec("create trigger block_restoration after insert on public.user_roles for each row execute function public.restore_team_member_on_role_grant()");
+    await expect(db.query("insert into public.user_roles values ($1,'employee')", [ids.removedUser])).rejects.toThrow(/cannot restore/i);
+    const rows = await db.query("select id from public.profiles where id=$1 and membership_removed_at is not null and access_revoked_at is not null", [ids.removedUser]);
+    expect(rows.rows).toHaveLength(1);
   });
 
-  it("allows an explicitly approved recovery of a removed member only after the target accepts", async () => {
-    const recoveryToken = "f".repeat(64);
-    await asUser(ids.executive, () =>
-      db.query(
-        `select public.create_recovery_invitation(
-          '${ids.removedUser}', '${recoveryToken}', 'employee', '{}', 'Reinstate approved employee access'
-        )`,
-      ),
-    );
-
-    const beforeAcceptance = await db.query<{ is_active_member: boolean }>(
-      `select public.is_active_member('${ids.removedUser}')`,
-    );
-    expect(beforeAcceptance.rows[0]?.is_active_member).toBe(false);
-
-    const accepted = await asUser(ids.removedUser, () =>
-      db.query<{ complete_pending_invitation: boolean }>(
-        "select public.complete_pending_invitation()",
-      ),
-    );
-    expect(accepted.rows[0]?.complete_pending_invitation).toBe(true);
-
-    const afterAcceptance = await db.query<{
-      access_revoked_at: string | null;
-      membership_removed_at: string | null;
-    }>("select access_revoked_at, membership_removed_at from public.profiles where id = $1", [
-      ids.removedUser,
-    ]);
-    expect(afterAcceptance.rows[0]).toEqual({
-      access_revoked_at: null,
-      membership_removed_at: null,
-    });
-    const roles = await db.query<{ role: string }>(
-      "select role from public.user_roles where user_id = $1",
-      [ids.removedUser],
-    );
-    expect(roles.rows).toEqual([{ role: "employee" }]);
+  it("rejects stale recovery invitations without changing Creator business data", async () => {
+    const token = "e".repeat(64);
+    await db.query("insert into public.creators(id,email,user_id) values($1,$2,$3)", [ids.revokedCreator,"recover.creator@example.test",ids.revokedUser]);
+    await db.query("insert into public.invitations(email,token_hash,role,created_by,recovery_user_id) values($1,$2,'creator',$3,$4)", ["recover.creator@example.test",token,ids.executive,ids.revokedUser]);
+    await expect(asUser(ids.revokedUser, () => db.query(`select public.accept_invitation('${token}')`))).rejects.toThrow(/active account/i);
+    await expect(asUser(ids.executive, () => db.query(`select public.create_invitation('recover.creator@example.test','${"9".repeat(64)}','creator')`))).rejects.toThrow(/access was revoked/i);
+    expect((await db.query("select user_id from public.creators where id=$1",[ids.revokedCreator])).rows).toEqual([{user_id:ids.revokedUser}]);
   });
 
   it("prevents non-executives from revoking invites and rejects revoked tokens", async () => {
