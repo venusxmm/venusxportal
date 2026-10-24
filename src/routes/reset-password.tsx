@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -22,7 +22,6 @@ export const Route = createFileRoute("/reset-password")({
 });
 
 function ResetPassword() {
-  const navigate = useNavigate();
   const [ready, setReady] = useState(false);
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
