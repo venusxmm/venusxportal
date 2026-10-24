@@ -54,6 +54,9 @@ function AuthPage() {
       const hash = window.location.hash;
       const token = getInvitationToken(search, hash);
       const params = authLinkParameters(search, hash);
+      if (new URLSearchParams(search).get("verified") === "1" && active) {
+        setNotice("Email verified successfully. You can now sign in.");
+      }
       if (active) setInvite(token);
       try {
         if (params.has("error") || params.has("error_description")) {
