@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect } from "react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -19,6 +20,24 @@ export const Route = createFileRoute("/")({
 });
 
 function Index() {
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    const fragment = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const authParameters = [
+      "error",
+      "error_code",
+      "error_description",
+      "access_token",
+      "refresh_token",
+      "token_hash",
+      "code",
+      "type",
+    ];
+    if (authParameters.some((key) => query.has(key) || fragment.has(key))) {
+      window.location.replace(`/auth${window.location.search}${window.location.hash}`);
+    }
+  }, []);
+
   return (
     <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-6 text-center">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,var(--gold-soft),transparent_60%)]" />
