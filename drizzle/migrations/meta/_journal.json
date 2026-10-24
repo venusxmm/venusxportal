@@ -141,6 +141,13 @@
       "when": 1792802786300,
       "tag": "0019_creator_invitation_auth_flow",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1792812790670,
+      "tag": "0020_creator_invitation_workspace_binding",
+      "breakpoints": true
     }
   ]
 }

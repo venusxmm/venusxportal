@@ -53,6 +53,7 @@ export const meQuery = queryOptions({
       const { data, error } = await supabase.rpc("resolve_creator_link");
       if (error) throw error;
       creatorId = data ?? creatorId;
+      if (!creatorId) throw new Error("Creator account has no valid active workspace. Ask an Executive to review the association.");
     }
 
     return {

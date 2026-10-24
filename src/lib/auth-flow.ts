@@ -114,6 +114,10 @@ export async function authenticatedWorkspaceRoute(): Promise<WorkspaceRoute> {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError) throw userError;
   if (!userData.user) throw new Error("Sign in to continue.");
+  if (!userData.user.email_confirmed_at) throw new Error("Confirm your email address before continuing.");
+
+  const { error: pendingError } = await supabase.rpc("complete_pending_invitation");
+  if (pendingError) throw pendingError;
 
   const { data: roleRows, error: rolesError } = await supabase
     .from("user_roles")
@@ -123,9 +127,47 @@ export async function authenticatedWorkspaceRoute(): Promise<WorkspaceRoute> {
 
   const roles = (roleRows ?? []).map((row) => row.role);
   if (roles.includes("creator")) {
-    const { error } = await supabase.rpc("resolve_creator_link");
+    const { data: creatorId, error } = await supabase.rpc("resolve_creator_link");
     if (error) throw error;
+    if (!creatorId) throw new Error("Creator account has no valid workspace. Ask an Executive to review the association.");
   }
 
   return resolveWorkspaceRoute(roles);
+}
+
+export function authLinkParameters(search: string, hash: string) {
+  const params = new URLSearchParams(hash.replace(/^#/, ""));
+  new URLSearchParams(search).forEach((value, key) => params.set(key, value));
+  return params;
+}
+
+/** The SDK handles implicit and PKCE links; token_hash templates need verifyOtp. */
+export async function verifyAuthLink(search: string, hash: string, expected: "signup" | "recovery") {
+  const params = authLinkParameters(search, hash);
+  if (params.has("error") || params.has("error_description")) {
+    throw new Error("This authentication link is invalid or expired. Request a new link.");
+  }
+  const tokenHash = params.get("token_hash");
+  if (tokenHash) {
+    const type = params.get("type");
+    if (type !== expected && !(expected === "signup" && type === "email")) {
+      throw new Error("This link is not valid for this action.");
+    }
+    const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
+    if (error) throw error;
+  } else {
+    const { error } = await supabase.auth.initialize();
+    if (error) throw error;
+  }
+  const { data, error } = await supabase.auth.getUser();
+  if (error) throw error;
+  if (!data.user?.email_confirmed_at) throw new Error("Open a valid verification link from your email.");
+  return data.user;
+}
+
+export async function completeInvitation(token: string | null) {
+  const { error } = token
+    ? await supabase.rpc("accept_invitation", { _token_hash: await hashInvitationToken(token) })
+    : await supabase.rpc("complete_pending_invitation");
+  if (error) throw error;
 }

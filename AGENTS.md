@@ -16,6 +16,8 @@
 - Authorization lives in Postgres RLS + security-definer helpers (`is_executive`, `has_area`, `can_access_creator`, `can_see_task`, `is_own_creator`); UI hiding is cosmetic only. Why: one permission system, enforced server-side.
 - Roles in `user_roles`, employee work areas in `user_areas`; never store privileges on profiles. Why: prevents privilege escalation.
 - `creators` is the single creator record; every module links by `creator_id` instead of copying creator data. Why: one source of truth.
+- Creator invitations pin `invitations.creator_id`; verification/login recovers pending acceptance through an authenticated RPC, never by client-selected workspace IDs. Why: persist the original workspace across devices without restoring revoked access.
+- Auth email callbacks are public, validate provider identity, and return to sign-in after verification; the SDK processes implicit/PKCE links and token-hash links use verifyOtp. Why: keep verification separate from workspace navigation.
 - All ledger math goes through `src/lib/finance.ts` (`summarize`), per currency, in cents, excluding voided (`archived_at`) rows. Why: consistent, testable figures.
 - Ledger entries are voided (archived), never deleted; `external_ref` is unique to block duplicate imports. Why: traceability.
 - Automations insert with a unique `dedupe_key` + `on conflict do nothing` and log to `audit_events`. Why: idempotent retries.
