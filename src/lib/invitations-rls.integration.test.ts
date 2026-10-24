@@ -13,8 +13,12 @@ const creatorAuthMigration = readFileSync(
   resolve(process.cwd(), "drizzle/migrations/0019_creator_invitation_auth_flow.sql"),
   "utf8",
 );
+const creatorWorkspaceMigration = readFileSync(
+  resolve(process.cwd(), "drizzle/migrations/0020_creator_invitation_workspace_binding.sql"),
+  "utf8",
+);
 const memberRecoveryMigration = readFileSync(
-  resolve(process.cwd(), "drizzle/migrations/0020_explicit_member_recovery.sql"),
+  resolve(process.cwd(), "drizzle/migrations/0021_explicit_member_recovery.sql"),
   "utf8",
 );
 const ids = {
@@ -148,6 +152,7 @@ describe("invitation row-level security integration", () => {
     `);
     await db.exec(migration);
     await db.exec(creatorAuthMigration);
+    await db.exec(creatorWorkspaceMigration);
     await db.exec(memberRecoveryMigration);
     await db.exec(`
       create trigger on_auth_user_created
@@ -354,11 +359,11 @@ describe("invitation row-level security integration", () => {
     expect(beforeAcceptance.rows[0]?.is_active_member).toBe(false);
 
     const accepted = await asUser(ids.removedUser, () =>
-      db.query<{ accept_invitation: boolean }>(
-        `select public.accept_invitation('${recoveryToken}')`,
+      db.query<{ complete_pending_invitation: boolean }>(
+        "select public.complete_pending_invitation()",
       ),
     );
-    expect(accepted.rows[0]?.accept_invitation).toBe(true);
+    expect(accepted.rows[0]?.complete_pending_invitation).toBe(true);
 
     const afterAcceptance = await db.query<{
       access_revoked_at: string | null;
