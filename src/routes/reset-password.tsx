@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { authenticatedWorkspaceRoute } from "@/lib/auth-flow";
+import { verifyAuthLink } from "@/lib/auth-flow";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +14,8 @@ export const Route = createFileRoute("/reset-password")({
       { name: "description", content: "Set a new password for your VenusX Portal account." },
       { property: "og:title", content: "Reset password — VenusX Portal" },
       { property: "og:description", content: "Set a new password for your VenusX Portal account." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: ResetPassword,
@@ -29,37 +31,26 @@ function ResetPassword() {
 
   useEffect(() => {
     let active = true;
-    const { data } = supabase.auth.onAuthStateChange((event) => {
-      if (active && (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN")) setReady(true);
-    });
-    supabase.auth
-      .getSession()
-      .then(({ data: sessionData, error }) => {
+    verifyAuthLink(window.location.search, window.location.hash, "recovery")
+      .then(() => {
         if (!active) return;
-        if (error) throw error;
-        if (sessionData.session) setReady(true);
-        else
-          setNotice(
-            "Open this page from a valid password reset link. Request a new link if it expired.",
-          );
+        setReady(true);
+        window.history.replaceState(null, "", "/reset-password");
       })
       .catch((error: unknown) => {
         if (!active) return;
         setNotice(
           error instanceof Error ? error.message : "We could not validate this password link.",
         );
-      })
-      .finally(() => {
-        if (active) setReady(true);
       });
     return () => {
       active = false;
-      data.subscription.unsubscribe();
     };
   }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (!ready) return;
     if (pw !== pw2) {
       toast.error("Passwords don't match");
       return;
@@ -69,8 +60,9 @@ function ResetPassword() {
       const { error } = await supabase.auth.updateUser({ password: pw });
       if (error) throw error;
       toast.success("Password updated");
-      const route = await authenticatedWorkspaceRoute();
-      navigate({ to: route, replace: true });
+      const { error: signOutError } = await supabase.auth.signOut({ scope: "local" });
+      if (signOutError) throw signOutError;
+      navigate({ to: "/auth", search: { setup: "1" }, replace: true });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not update password.");
     } finally {

@@ -148,15 +148,38 @@ export function authLinkParameters(search: string, hash: string) {
 }
 
 /** The SDK handles implicit and PKCE links; token_hash templates need verifyOtp. */
-export async function verifyAuthLink(
-  search: string,
-  hash: string,
-  expected: "signup" | "recovery",
-) {
+export function assertAuthLink(search: string, hash: string, expected: "signup" | "invite" | "recovery") {
   const params = authLinkParameters(search, hash);
   if (params.has("error") || params.has("error_description")) {
-    throw new Error("This authentication link is invalid or expired. Request a new link.");
+    throw new Error("This authentication link is invalid, already used or expired. Request a new link.");
   }
+  const type = params.get("type");
+  if (type && type !== expected && !(expected === "signup" && type === "email")) {
+    throw new Error("This link is not valid for this action.");
+  }
+  if (!params.get("code") && !(type && (params.get("token_hash") || (params.get("access_token") && params.get("refresh_token"))))) {
+    throw new Error("Open a valid link from your email to continue.");
+  }
+  return params;
+}
+
+const linkVerifications = new Map<string, Promise<Awaited<ReturnType<typeof verifyAuthLinkOnce>>>>();
+
+export function verifyAuthLink(search: string, hash: string, expected: "signup" | "invite" | "recovery") {
+  const key = JSON.stringify([search, hash, expected]);
+  const existing = linkVerifications.get(key);
+  if (existing) return existing;
+  const result = verifyAuthLinkOnce(search, hash, expected);
+  linkVerifications.set(key, result);
+  return result;
+}
+
+async function verifyAuthLinkOnce(
+  search: string,
+  hash: string,
+  expected: "signup" | "invite" | "recovery",
+) {
+  const params = assertAuthLink(search, hash, expected);
   const tokenHash = params.get("token_hash");
   if (tokenHash) {
     const type = params.get("type");
