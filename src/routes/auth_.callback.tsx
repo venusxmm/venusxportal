@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { completeInvitation, verifyAuthLink } from "@/lib/auth-flow";
 import { Button } from "@/components/ui/button";
 
-export const Route = createFileRoute("/auth/callback")({
+export const Route = createFileRoute("/auth_/callback")({
   head: () => ({
     meta: [
       { title: "Confirm your email — VenusX Portal" },
