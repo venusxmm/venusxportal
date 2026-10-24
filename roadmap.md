@@ -1,5 +1,10 @@
 # V1 stabilization
 
+## Current targeted connection repair
+- [ ] Trace invitation middleware environment failure and restore the existing runtime binding.
+- [ ] Verify authenticated Team & Access backend reachability without sending email or changing members.
+- [ ] Run focused invitation, revocation/removal and password-reset checks; report real-email blockers.
+
 ## Explicit access recovery removal
 - [x] Remove recovery section, removed-member category, handlers, state and obsolete copy controls.
 - [x] Disable legacy recovery creation and acceptance; prevent profile/role-based restoration without deleting business data.
