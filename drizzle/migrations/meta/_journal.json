@@ -148,6 +148,13 @@
       "when": 1792812790670,
       "tag": "0020_creator_invitation_workspace_binding",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1792819300000,
+      "tag": "0021_explicit_member_recovery",
+      "breakpoints": true
     }
   ]
 }

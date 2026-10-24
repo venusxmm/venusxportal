@@ -160,6 +160,7 @@ export type Database = {
           email: string
           expires_at: string
           id: string
+          recovery_user_id: string | null
           revoked_at: string | null
           role: Database["public"]["Enums"]["app_role"]
           token_hash: string
@@ -173,6 +174,7 @@ export type Database = {
           email: string
           expires_at?: string
           id?: string
+          recovery_user_id?: string | null
           revoked_at?: string | null
           role: Database["public"]["Enums"]["app_role"]
           token_hash: string
@@ -186,6 +188,7 @@ export type Database = {
           email?: string
           expires_at?: string
           id?: string
+          recovery_user_id?: string | null
           revoked_at?: string | null
           role?: Database["public"]["Enums"]["app_role"]
           token_hash?: string
@@ -509,6 +512,16 @@ export type Database = {
           _email: string
           _role: Database["public"]["Enums"]["app_role"]
           _token_hash: string
+        }
+        Returns: Json
+      }
+      create_recovery_invitation: {
+        Args: {
+          _areas?: Database["public"]["Enums"]["work_area"][]
+          _reason?: string
+          _role: Database["public"]["Enums"]["app_role"]
+          _token_hash: string
+          _user_id: string
         }
         Returns: Json
       }
