@@ -147,6 +147,13 @@ export function authLinkParameters(search: string, hash: string) {
   return params;
 }
 
+export function isAuthLinkTypeAllowed(
+  type: string | null,
+  expected: "signup" | "recovery",
+): boolean {
+  return type === expected || (expected === "signup" && (type === "email" || type === "magiclink"));
+}
+
 /** The SDK handles implicit and PKCE links; token_hash templates need verifyOtp. */
 export async function verifyAuthLink(
   search: string,
@@ -160,7 +167,7 @@ export async function verifyAuthLink(
   const tokenHash = params.get("token_hash");
   if (tokenHash) {
     const type = params.get("type");
-    if (type !== expected && !(expected === "signup" && type === "email")) {
+    if (!type || !isAuthLinkTypeAllowed(type, expected)) {
       throw new Error("This link is not valid for this action.");
     }
     const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type });

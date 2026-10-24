@@ -1,8 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { authenticatedWorkspaceRoute } from "@/lib/auth-flow";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,6 +21,7 @@ export const Route = createFileRoute("/reset-password")({
 
 function ResetPassword() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [ready, setReady] = useState(false);
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
@@ -68,9 +69,12 @@ function ResetPassword() {
     try {
       const { error } = await supabase.auth.updateUser({ password: pw });
       if (error) throw error;
-      toast.success("Password updated");
-      const route = await authenticatedWorkspaceRoute();
-      navigate({ to: route, replace: true });
+      await queryClient.cancelQueries();
+      queryClient.clear();
+      const { error: signOutError } = await supabase.auth.signOut({ scope: "local" });
+      if (signOutError) throw signOutError;
+      toast.success("Password updated. Sign in with your new password.");
+      navigate({ to: "/auth", search: { setup: "1" }, replace: true });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not update password.");
     } finally {

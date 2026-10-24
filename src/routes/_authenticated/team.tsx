@@ -5,6 +5,7 @@ import { copyText } from "@/lib/clipboard";
 import { Copy } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { getInvitationStatus, normalizeEmailAddress } from "@/lib/auth-flow";
 import { AREA_LABEL, AREA_ORDER, useMe, type AppRole, type WorkArea } from "@/lib/me";
 import { EmptyState, Loading, PageHeader } from "@/components/portal";
 import { Button } from "@/components/ui/button";
@@ -127,6 +128,7 @@ function Team() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["team"] });
+      qc.invalidateQueries({ queryKey: ["invitations"] });
       toast.success("Member access revoked");
     },
     onError: (e) => toast.error((e as Error).message),
@@ -139,6 +141,7 @@ function Team() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["team"] });
+      qc.invalidateQueries({ queryKey: ["invitations"] });
       toast.success("Member removed from Team & Access");
     },
     onError: (error) => toast.error((error as Error).message),
@@ -269,11 +272,11 @@ function Team() {
                           disabled={removeMember.isPending}
                           onClick={() =>
                             confirm(
-                              `Remove ${p.nickname || p.full_name || p.email} from Team & Access? Their sign-in identity will remain for historical references, but without roles or work areas they will not have portal access. A new role grant or accepted invitation can restore membership.`,
+                              `Remove ${p.nickname || p.full_name || p.email} from Team & Access? Their sign-in identity and business history will remain, but access is removed. An Executive can invite the same email again through the normal flow.`,
                             ) && removeMember.mutate(p.id)
                           }
                         >
-                          Remove from team
+                          Remove member
                         </Button>
                       )}
                     </td>
@@ -286,7 +289,7 @@ function Team() {
       <InvitationPanel
         invitations={invitations.data ?? []}
         recoveryMembers={d.people
-          .filter((person) => person.access_revoked_at || person.membership_removed_at)
+          .filter((person) => person.access_revoked_at)
           .map((person) => ({
             id: person.id,
             email: person.email,
@@ -344,49 +347,83 @@ function InvitationPanel({
 }) {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<AppRole>("employee");
+  const [areas, setAreas] = useState<WorkArea[]>([]);
   const [recoveryReason, setRecoveryReason] = useState("");
   const [busy, setBusy] = useState(false);
-  const [recentLinks, setRecentLinks] = useState<Record<string, string>>({});
+  const [deletingInvitationId, setDeletingInvitationId] = useState<string | null>(null);
   const [recoveryBusyFor, setRecoveryBusyFor] = useState<string | null>(null);
   const [recoveryLinks, setRecoveryLinks] = useState<Record<string, string>>({});
   const create = async () => {
     if (!email.trim()) return;
     setBusy(true);
+    let invitationId: string | null = null;
+    let emailRequested = false;
     try {
       const { token, hash } = await invitationToken();
       const { data, error } = await supabase.rpc("create_invitation", {
-        _email: email.trim(),
+        _email: normalizeEmailAddress(email),
         _token_hash: hash,
         _role: role,
-        _areas: [],
+        _areas: areas,
       });
       if (error) throw error;
-      const link = `${window.location.origin}/auth#invite=${token}`;
-      if (data && typeof data === "object" && "id" in data)
-        setRecentLinks((links) => ({
-          ...links,
-          [String(data["id"])]: link,
-        }));
-      const copied = await copyText(link);
-      toast.success(
-        copied
-          ? "Invitation created and link copied. Email not sent."
-          : "Invitation created. Select and copy the link below. Email not sent.",
-      );
+
+      if (!data || typeof data !== "object" || !("id" in data)) {
+        throw new Error("The invitation was created without an identifier.");
+      }
+      invitationId = String(data["id"]);
+
+      const status = await getInvitationStatus(token);
+      if (status.status !== "pending") {
+        throw new Error("The invitation is not pending and cannot be emailed.");
+      }
+      const redirect = new URL("/auth", window.location.origin);
+      redirect.searchParams.set("invite", token);
+      if (status.account_state !== "verified") redirect.searchParams.set("set_password", "1");
+
+      const { error: emailError } = await supabase.auth.signInWithOtp({
+        email: normalizeEmailAddress(email),
+        options: {
+          emailRedirectTo: redirect.toString(),
+          shouldCreateUser: true,
+        },
+      });
+      if (emailError) throw emailError;
+      emailRequested = true;
+
+      toast.success("Invitation email requested. Delivery is not confirmed.");
       setEmail("");
+      setAreas([]);
       onChanged();
     } catch (error) {
+      if (invitationId && !emailRequested) {
+        const { error: cleanupError } = await supabase.rpc("revoke_invitation", {
+          _id: invitationId,
+        });
+        if (cleanupError) {
+          toast.error(
+            `Invitation request failed and the pending invite could not be deleted: ${cleanupError.message}`,
+          );
+        }
+      }
       toast.error((error as Error).message);
     } finally {
       setBusy(false);
     }
   };
-  const revoke = async (id: string) => {
-    const { error } = await supabase.rpc("revoke_invitation", { _id: id });
-    if (error) toast.error(error.message);
-    else {
-      toast.success("Invitation revoked");
+  const deleteInvitation = async (id: string) => {
+    if (!confirm("Delete this pending invitation? Its link will stop working.")) return;
+    setDeletingInvitationId(id);
+    try {
+      const { data, error } = await supabase.rpc("revoke_invitation", { _id: id });
+      if (error) throw error;
+      if (!data) throw new Error("This invitation was already accepted or deleted.");
+      toast.success("Invitation deleted");
       onChanged();
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setDeletingInvitationId(null);
     }
   };
   const createRecoveryLink = async (member: (typeof recoveryMembers)[number]) => {
@@ -429,12 +466,14 @@ function InvitationPanel({
     <section className="mt-6 rounded-lg border bg-card p-5">
       <h2 className="font-medium">Invitations</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        Email not configured: a verified sender domain is required.
+        Invitation emails use the authentication sender. A copyable fallback link is available if
+        delivery fails.
       </p>
       <div className="mt-4 flex flex-wrap items-end gap-2">
         <div className="min-w-0 basis-full flex-1 space-y-1 sm:basis-auto">
-          <Label>Email</Label>
+          <Label htmlFor="invite-email">Email</Label>
           <Input
+            id="invite-email"
             type="email"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
@@ -442,9 +481,16 @@ function InvitationPanel({
           />
         </div>
         <div className="w-40 space-y-1">
-          <Label>Role</Label>
-          <Select value={role} onValueChange={(value) => setRole(value as AppRole)}>
-            <SelectTrigger>
+          <Label htmlFor="invite-role">Role</Label>
+          <Select
+            value={role}
+            onValueChange={(value) => {
+              const nextRole = value as AppRole;
+              setRole(nextRole);
+              if (nextRole !== "employee") setAreas([]);
+            }}
+          >
+            <SelectTrigger id="invite-role">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -457,9 +503,26 @@ function InvitationPanel({
           </Select>
         </div>
         <Button disabled={busy || !email.trim()} onClick={create}>
-          Create link
+          {busy ? "Sending…" : "Send invitation"}
         </Button>
       </div>
+      {role === "employee" && (
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2" aria-label="Employee areas">
+          {AREAS.map((area) => (
+            <label key={area} className="flex items-center gap-2 text-sm">
+              <Checkbox
+                checked={areas.includes(area)}
+                onCheckedChange={(checked) =>
+                  setAreas((current) =>
+                    checked ? [...current, area] : current.filter((selected) => selected !== area),
+                  )
+                }
+              />
+              {AREA_LABEL[area]}
+            </label>
+          ))}
+        </div>
+      )}
       <div className="mt-4 divide-y rounded-md border">
         {invitations
           .filter(
@@ -477,45 +540,14 @@ function InvitationPanel({
                   expires {new Date(item.expires_at).toLocaleDateString()}
                 </span>
               </span>
-              {recentLinks[item.id] && (
-                <Input
-                  aria-label={`Invitation URL for ${item.email}`}
-                  className="min-w-0 basis-full font-mono text-xs"
-                  readOnly
-                  value={recentLinks[item.id]}
-                  onFocus={(event) => event.currentTarget.select()}
-                />
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={!recentLinks[item.id]}
-                title={
-                  recentLinks[item.id]
-                    ? "Copy invitation link"
-                    : "The link is only available immediately after creation"
-                }
-                onClick={() => {
-                  const link = recentLinks[item.id];
-                  if (link)
-                    void copyText(link).then((copied) =>
-                      toast[copied ? "success" : "error"](
-                        copied
-                          ? "Invitation link copied"
-                          : "Copy unavailable. Select the link below.",
-                      ),
-                    );
-                }}
-              >
-                <Copy className="mr-1 h-4 w-4" /> Copy link
-              </Button>
               <Button
                 variant="ghost"
                 size="sm"
                 className="text-destructive"
-                onClick={() => revoke(item.id)}
+                disabled={deletingInvitationId !== null}
+                onClick={() => void deleteInvitation(item.id)}
               >
-                Revoke
+                {deletingInvitationId === item.id ? "Deleting…" : "Delete invitation"}
               </Button>
             </div>
           ))}

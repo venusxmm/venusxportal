@@ -8,6 +8,7 @@ import {
   getInvitationToken,
   invitationInitialMode,
   invitationStatusMessage,
+  isAuthLinkTypeAllowed,
   normalizeEmailAddress,
   parseInvitationStatus,
   resolveWorkspaceRoute,
@@ -23,6 +24,14 @@ describe("invitation and authentication state helpers", () => {
 
   it("normalizes invited emails consistently", () => {
     expect(normalizeEmailAddress("  Creator@Example.Test ")).toBe("creator@example.test");
+  });
+
+  it("accepts provider magic-link types only for account setup links", () => {
+    expect(isAuthLinkTypeAllowed("signup", "signup")).toBe(true);
+    expect(isAuthLinkTypeAllowed("email", "signup")).toBe(true);
+    expect(isAuthLinkTypeAllowed("magiclink", "signup")).toBe(true);
+    expect(isAuthLinkTypeAllowed("magiclink", "recovery")).toBe(false);
+    expect(isAuthLinkTypeAllowed("recovery", "signup")).toBe(false);
   });
 
   it("routes pending invitations to account setup and completed invitations to sign-in", () => {

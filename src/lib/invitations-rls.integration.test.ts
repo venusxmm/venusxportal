@@ -21,6 +21,10 @@ const memberRecoveryMigration = readFileSync(
   resolve(process.cwd(), "drizzle/migrations/0021_explicit_member_recovery.sql"),
   "utf8",
 );
+const teamAccessLifecycleMigration = readFileSync(
+  resolve(process.cwd(), "drizzle/migrations/0022_team_access_membership_lifecycle.sql"),
+  "utf8",
+);
 const ids = {
   executive: "00000000-0000-0000-0000-000000000001",
   employee: "00000000-0000-0000-0000-000000000002",
@@ -32,6 +36,7 @@ const ids = {
   revokedUser: "00000000-0000-0000-0000-000000000009",
   removedUser: "00000000-0000-0000-0000-00000000000a",
   revokedCreator: "00000000-0000-0000-0000-00000000000b",
+  removableUser: "00000000-0000-0000-0000-00000000000d",
 };
 const validToken = "a".repeat(64);
 
@@ -135,25 +140,29 @@ describe("invitation row-level security integration", () => {
           ('${ids.executive}', null), ('${ids.employee}', null), ('${ids.invitedUser}', null),
           ('${ids.wrongUser}', null), ('${ids.linkedUser}', null),
           ('${ids.revokedUser}', 'recover.creator@example.test'),
-          ('${ids.removedUser}', 'removed.member@example.test');
+          ('${ids.removedUser}', 'removed.member@example.test'),
+          ('${ids.removableUser}', 'remove.member@example.test');
       update public.profiles set access_revoked_at = now()
         where id = '${ids.revokedUser}';
       update public.profiles set access_revoked_at = now(), membership_removed_at = now()
         where id = '${ids.removedUser}';
       insert into public.user_roles (user_id, role) values
-        ('${ids.executive}', 'executive'), ('${ids.employee}', 'employee');
+        ('${ids.executive}', 'executive'), ('${ids.employee}', 'employee'),
+        ('${ids.removableUser}', 'employee');
       insert into auth.users (id, email, email_confirmed_at) values
         ('${ids.executive}', 'executive@example.test', now()),
         ('${ids.employee}', 'employee@example.test', now()),
         ('${ids.invitedUser}', 'invited@example.test', now()),
         ('${ids.wrongUser}', 'other@example.test', now()),
         ('${ids.revokedUser}', 'recover.creator@example.test', now()),
-        ('${ids.removedUser}', 'removed.member@example.test', now());
+        ('${ids.removedUser}', 'removed.member@example.test', now()),
+        ('${ids.removableUser}', 'remove.member@example.test', now());
     `);
     await db.exec(migration);
     await db.exec(creatorAuthMigration);
     await db.exec(creatorWorkspaceMigration);
     await db.exec(memberRecoveryMigration);
+    await db.exec(teamAccessLifecycleMigration);
     await db.exec(`
       create trigger on_auth_user_created
       after insert on auth.users
@@ -378,43 +387,69 @@ describe("invitation row-level security integration", () => {
     ]);
   });
 
-  it("allows an explicitly approved recovery of a removed member only after the target accepts", async () => {
-    const recoveryToken = "f".repeat(64);
+  it("allows a removed member to accept a normal invitation without restoring revoked accounts", async () => {
+    const invitationToken = "f".repeat(64);
+    const before = await db.query<{
+      access_revoked_at: string | null;
+      membership_removed_at: string | null;
+      is_active_member: boolean;
+    }>(
+      `select access_revoked_at, membership_removed_at,
+        public.is_active_member(id) as is_active_member
+       from public.profiles where id = $1`,
+      [ids.removedUser],
+    );
+    expect(before.rows[0]).toMatchObject({
+      access_revoked_at: null,
+      is_active_member: false,
+    });
+    expect(before.rows[0]?.membership_removed_at).not.toBeNull();
+
     await asUser(ids.executive, () =>
       db.query(
-        `select public.create_recovery_invitation(
-          '${ids.removedUser}', '${recoveryToken}', 'employee', '{}', 'Reinstate approved employee access'
+        `select public.create_invitation(
+          'removed.member@example.test', '${invitationToken}', 'employee'
         )`,
       ),
     );
 
-    const beforeAcceptance = await db.query<{ is_active_member: boolean }>(
-      `select public.is_active_member('${ids.removedUser}')`,
-    );
-    expect(beforeAcceptance.rows[0]?.is_active_member).toBe(false);
-
     const accepted = await asUser(ids.removedUser, () =>
-      db.query<{ complete_pending_invitation: boolean }>(
-        "select public.complete_pending_invitation()",
+      db.query<{ accept_invitation: boolean }>(
+        `select public.accept_invitation('${invitationToken}')`,
       ),
     );
-    expect(accepted.rows[0]?.complete_pending_invitation).toBe(true);
+    expect(accepted.rows[0]?.accept_invitation).toBe(true);
 
     const afterAcceptance = await db.query<{
       access_revoked_at: string | null;
       membership_removed_at: string | null;
-    }>("select access_revoked_at, membership_removed_at from public.profiles where id = $1", [
-      ids.removedUser,
-    ]);
+      is_active_member: boolean;
+    }>(
+      `select access_revoked_at, membership_removed_at,
+        public.is_active_member(id) as is_active_member
+      from public.profiles where id = $1`,
+      [ids.removedUser],
+    );
     expect(afterAcceptance.rows[0]).toEqual({
       access_revoked_at: null,
       membership_removed_at: null,
+      is_active_member: true,
     });
     const roles = await db.query<{ role: string }>(
       "select role from public.user_roles where user_id = $1",
       [ids.removedUser],
     );
     expect(roles.rows).toEqual([{ role: "employee" }]);
+
+    await expect(
+      asUser(ids.executive, () =>
+        db.query(
+          `select public.create_invitation(
+            'recover.creator@example.test', '${"9".repeat(64)}', 'creator'
+          )`,
+        ),
+      ),
+    ).rejects.toThrow(/access was revoked/i);
   });
 
   it("prevents non-executives from revoking invites and rejects revoked tokens", async () => {
@@ -431,14 +466,19 @@ describe("invitation row-level security integration", () => {
       ),
     ).rejects.toThrow(/Only executives/i);
 
-    const revoked = await asUser(ids.executive, () =>
+    const deleted = await asUser(ids.executive, () =>
       db.query<{ revoke_invitation: boolean }>("select public.revoke_invitation($1)", [inviteId]),
     );
-    expect(revoked.rows[0]?.revoke_invitation).toBe(true);
+    expect(deleted.rows[0]?.revoke_invitation).toBe(true);
     const revokedStatus = await db.query<{ get_invitation_status: { status: string } }>(
       `select public.get_invitation_status('${validToken}')`,
     );
-    expect(revokedStatus.rows[0]?.get_invitation_status.status).toBe("revoked");
+    expect(revokedStatus.rows[0]?.get_invitation_status.status).toBe("invalid");
+    const remaining = await db.query<{ count: string }>(
+      "select count(*)::text as count from public.invitations where token_hash = $1",
+      [validToken],
+    );
+    expect(remaining.rows).toEqual([{ count: "0" }]);
     await expect(
       asUser(ids.invitedUser, () =>
         db.query<{ accept_invitation: boolean }>(
@@ -446,6 +486,60 @@ describe("invitation row-level security integration", () => {
         ),
       ),
     ).rejects.toThrow(/invalid or expired/i);
+  });
+
+  it("removes membership without deleting identity/history and allows a normal reinvitation", async () => {
+    const invitationToken = "1".repeat(64);
+    await db.query("delete from public.user_roles where user_id = $1", [ids.removableUser]);
+    await db.query("update public.profiles set access_revoked_at = now() where id = $1", [
+      ids.removableUser,
+    ]);
+    const removal = await asUser(ids.executive, () =>
+      db.query<{ remove_team_member: boolean }>("select public.remove_team_member($1)", [
+        ids.removableUser,
+      ]),
+    );
+    expect(removal.rows[0]?.remove_team_member).toBe(true);
+
+    const removed = await db.query<{
+      auth_identity: boolean;
+      profile: boolean;
+      access_revoked_at: string | null;
+      membership_removed_at: string | null;
+    }>(
+      `select exists(select 1 from auth.users where id = p.id) as auth_identity,
+        true as profile, p.access_revoked_at, p.membership_removed_at
+       from public.profiles p where p.id = $1`,
+      [ids.removableUser],
+    );
+    expect(removed.rows[0]).toMatchObject({
+      auth_identity: true,
+      profile: true,
+      access_revoked_at: null,
+    });
+    expect(removed.rows[0]?.membership_removed_at).not.toBeNull();
+
+    await asUser(ids.executive, () =>
+      db.query(
+        `select public.create_invitation(
+          'remove.member@example.test', '${invitationToken}', 'employee'
+        )`,
+      ),
+    );
+    const accepted = await asUser(ids.removableUser, () =>
+      db.query<{ complete_pending_invitation: boolean }>(
+        "select public.complete_pending_invitation()",
+      ),
+    );
+    expect(accepted.rows[0]?.complete_pending_invitation).toBe(true);
+
+    const active = await db.query<{ is_active_member: boolean; count: string }>(
+      `select public.is_active_member(p.id) as is_active_member,
+        (select count(*)::text from public.profiles where id = p.id) as count
+       from public.profiles p where p.id = $1`,
+      [ids.removableUser],
+    );
+    expect(active.rows).toEqual([{ is_active_member: true, count: "1" }]);
   });
 
   it("links a verified Creator by normalized invitation email and remains idempotent", async () => {

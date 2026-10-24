@@ -41,6 +41,7 @@ function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
+  const [passwordSetupRequired, setPasswordSetupRequired] = useState(false);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
@@ -67,15 +68,44 @@ function AuthPage() {
             "This authentication link is invalid or expired. Request a new link or sign in.",
           );
         }
-        // Support confirmation URLs sent before the dedicated callback existed.
-        if (params.get("type") === "signup" || params.get("type") === "email") {
-          await verifyAuthLink(search, hash, "signup");
+        // Handle provider OTP links for invitations before rendering the password form.
+        if (["signup", "email", "magiclink"].includes(params.get("type") ?? "")) {
+          const authUser = await verifyAuthLink(search, hash, "signup");
+          if (token && params.get("set_password") === "1") {
+            const status = await getInvitationStatus(token);
+            if (
+              status.status !== "pending" ||
+              normalizeEmailAddress(status.email) !== normalizeEmailAddress(authUser.email ?? "")
+            ) {
+              throw new Error("This invitation is unavailable or does not match this account.");
+            }
+            if (active) {
+              setInvite(token);
+              setInviteStatus(status);
+              setEmail(status.email);
+              setMode("up");
+              setPasswordSetupRequired(true);
+              setNotice("Email verified. Set your password to finish accepting the invitation.");
+            }
+            window.history.replaceState(
+              null,
+              "",
+              `/auth?invite=${encodeURIComponent(token)}&set_password=1`,
+            );
+            return;
+          }
           await completeInvitation(token);
           await queryClient.cancelQueries();
           queryClient.clear();
-          const { error } = await supabase.auth.signOut();
+          const { error } = await supabase.auth.signOut({ scope: "local" });
           if (error) throw error;
-          if (active) setNotice("Email verified successfully. You can now sign in.");
+          if (active) {
+            setNotice(
+              token
+                ? "Invitation accepted. Sign in with your existing password."
+                : "Email verified successfully. You can now sign in.",
+            );
+          }
           window.history.replaceState(null, "", "/auth");
           return;
         }
@@ -92,6 +122,28 @@ function AuthPage() {
             status.status === "expired" ||
             status.status === "revoked"
           ) {
+            return;
+          }
+        }
+        if (token && params.get("set_password") === "1") {
+          if (status?.status !== "pending") {
+            throw new Error("This invitation is unavailable or expired.");
+          }
+          const { data, error } = await supabase.auth.getSession();
+          if (error) throw error;
+          if (data.session) {
+            const { data: userData, error: userError } = await supabase.auth.getUser();
+            if (userError) throw userError;
+            if (
+              !userData.user?.email ||
+              normalizeEmailAddress(userData.user.email) !== normalizeEmailAddress(status.email)
+            ) {
+              throw new Error("Sign in with the email address on this invitation.");
+            }
+            setMode("up");
+            setEmail(status.email);
+            setPasswordSetupRequired(true);
+            setNotice("Set your password to finish accepting the invitation.");
             return;
           }
         }
@@ -127,17 +179,58 @@ function AuthPage() {
     setBusy(true);
     setNotice(null);
     try {
-      const { error } = await supabase.auth.resend({
-        type: "signup",
-        email: normalizeEmailAddress(email),
-        options: { emailRedirectTo: confirmationRedirect() },
-      });
+      let error: Error | null = null;
+      if (invite) {
+        const status = await getInvitationStatus(invite);
+        if (status.status !== "pending") {
+          throw new Error("This invitation is no longer pending. Ask an Executive for a new link.");
+        }
+        const redirect = new URL("/auth", window.location.origin);
+        redirect.searchParams.set("invite", invite);
+        if (status.account_state !== "verified") redirect.searchParams.set("set_password", "1");
+        const result = await supabase.auth.signInWithOtp({
+          email: normalizeEmailAddress(email),
+          options: {
+            emailRedirectTo: redirect.toString(),
+            shouldCreateUser: true,
+          },
+        });
+        error = result.error;
+      } else {
+        const result = await supabase.auth.resend({
+          type: "signup",
+          email: normalizeEmailAddress(email),
+          options: { emailRedirectTo: confirmationRedirect() },
+        });
+        error = result.error;
+      }
       if (error) throw error;
-      setNotice("Confirmation requested. Check your email for the new link.");
+      setNotice(
+        invite
+          ? "Invitation email requested. Check your inbox; delivery is not confirmed."
+          : "Confirmation requested. Check your email for the new link.",
+      );
     } catch (error) {
       setNotice(
         error instanceof Error ? error.message : "Could not resend confirmation. Try again.",
       );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resendPasswordReset() {
+    if (!email) return;
+    setBusy(true);
+    setNotice(null);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(normalizeEmailAddress(email), {
+        redirectTo: window.location.origin + "/reset-password",
+      });
+      if (error) throw error;
+      setNotice("Password reset email requested. Delivery is not confirmed.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not resend the reset email.");
     } finally {
       setBusy(false);
     }
@@ -175,6 +268,39 @@ function AuthPage() {
         navigate({ to: route, replace: true });
       } else {
         if (password !== passwordConfirmation) throw new Error("Passwords do not match.");
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
+        if (invite && !sessionData.session) {
+          throw new Error(
+            "Open the one-time link from the invitation email to verify your email before setting a password.",
+          );
+        }
+        if (invite && passwordSetupRequired && sessionData.session) {
+          const { data: userData, error: userError } = await supabase.auth.getUser();
+          if (userError) throw userError;
+          const freshStatus = await getInvitationStatus(invite);
+          if (
+            !userData.user?.email ||
+            freshStatus.status !== "pending" ||
+            normalizeEmailAddress(userData.user.email) !== normalizeEmailAddress(freshStatus.email)
+          ) {
+            throw new Error("This invitation is unavailable or does not match this account.");
+          }
+          const { error: passwordError } = await supabase.auth.updateUser({ password });
+          if (passwordError) throw passwordError;
+          await completeInvitation(invite);
+          await queryClient.cancelQueries();
+          queryClient.clear();
+          const { error: signOutError } = await supabase.auth.signOut({ scope: "local" });
+          if (signOutError) throw signOutError;
+          setMode("in");
+          setInvite(null);
+          setInviteStatus(null);
+          setPasswordSetupRequired(false);
+          window.history.replaceState(null, "", "/auth?setup=1");
+          setNotice("Your password is set and your invitation is accepted. Sign in to continue.");
+          return;
+        }
         const freshStatus = invite ? await getInvitationStatus(invite) : null;
         if (invite && (freshStatus?.status !== "pending" || freshStatus.account_state !== "new")) {
           if (freshStatus) {
@@ -229,7 +355,9 @@ function AuthPage() {
   }
 
   const invitationAllowsSignup =
-    !invite || (inviteStatus?.status === "pending" && inviteStatus.account_state === "new");
+    !invite ||
+    (inviteStatus?.status === "pending" &&
+      (inviteStatus.account_state === "new" || passwordSetupRequired));
   const invitationBlocked = Boolean(
     invite && (!inviteStatus || ["invalid", "expired", "revoked"].includes(inviteStatus.status)),
   );
@@ -267,14 +395,18 @@ function AuthPage() {
             {notice}
           </p>
         )}
-        {(awaitingInvitationVerification || sent || notice?.includes("invalid or expired")) && (
+        {(awaitingInvitationVerification || sent) && (
           <Button
             variant="outline"
             className="mb-4 w-full"
             disabled={busy || !email}
-            onClick={resendInvitationConfirmation}
+            onClick={mode === "forgot" ? resendPasswordReset : resendInvitationConfirmation}
           >
-            Resend confirmation email
+            {mode === "forgot"
+              ? "Resend password reset email"
+              : invite
+                ? "Resend invitation email"
+                : "Resend confirmation email"}
           </Button>
         )}
         {sent ? (
