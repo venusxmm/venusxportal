@@ -156,6 +156,7 @@ export type Database = {
           areas: Database["public"]["Enums"]["work_area"][]
           created_at: string
           created_by: string
+          creator_id: string | null
           email: string
           expires_at: string
           id: string
@@ -168,6 +169,7 @@ export type Database = {
           areas?: Database["public"]["Enums"]["work_area"][]
           created_at?: string
           created_by?: string
+          creator_id?: string | null
           email: string
           expires_at?: string
           id?: string
@@ -180,6 +182,7 @@ export type Database = {
           areas?: Database["public"]["Enums"]["work_area"][]
           created_at?: string
           created_by?: string
+          creator_id?: string | null
           email?: string
           expires_at?: string
           id?: string
@@ -187,7 +190,15 @@ export type Database = {
           role?: Database["public"]["Enums"]["app_role"]
           token_hash?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "invitations_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
+            referencedRelation: "creators"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       notifications: {
         Row: {
@@ -491,6 +502,7 @@ export type Database = {
       can_access_creator: { Args: { _creator_id: string }; Returns: boolean }
       can_see_task: { Args: { _task_id: string }; Returns: boolean }
       claim_first_executive: { Args: never; Returns: boolean }
+      complete_pending_invitation: { Args: never; Returns: boolean }
       create_invitation: {
         Args: {
           _areas?: Database["public"]["Enums"]["work_area"][]
