@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { createPasswordRecoveryMarker, isPasswordRecoveryMarkerValid } from "@/lib/auth-flow";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +20,39 @@ export const Route = createFileRoute("/reset-password")({
   component: ResetPassword,
 });
 
+const RECOVERY_MARKER_KEY = "venusx.password-recovery";
+const RECOVERY_MARKER_LIFETIME_MS = 60 * 60 * 1000;
+
+function storeRecoveryMarker(userId: string) {
+  try {
+    window.sessionStorage.setItem(
+      RECOVERY_MARKER_KEY,
+      createPasswordRecoveryMarker(userId, Date.now() + RECOVERY_MARKER_LIFETIME_MS),
+    );
+  } catch {
+    return;
+  }
+}
+
+function hasValidRecoveryMarker(userId: string) {
+  try {
+    return isPasswordRecoveryMarkerValid(
+      window.sessionStorage.getItem(RECOVERY_MARKER_KEY),
+      userId,
+    );
+  } catch {
+    return false;
+  }
+}
+
+function clearRecoveryMarker() {
+  try {
+    window.sessionStorage.removeItem(RECOVERY_MARKER_KEY);
+  } catch {
+    return;
+  }
+}
+
 function ResetPassword() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -27,19 +61,29 @@ function ResetPassword() {
   const [pw2, setPw2] = useState("");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [recoveryAuthorized, setRecoveryAuthorized] = useState(false);
 
   useEffect(() => {
     let active = true;
-    const { data } = supabase.auth.onAuthStateChange((event) => {
-      if (active && (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN")) setReady(true);
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      if (active && event === "PASSWORD_RECOVERY" && session) {
+        storeRecoveryMarker(session.user.id);
+        setRecoveryAuthorized(true);
+        setReady(true);
+      } else if (event === "SIGNED_OUT") {
+        clearRecoveryMarker();
+        if (active) setRecoveryAuthorized(false);
+      }
     });
     supabase.auth
       .getSession()
       .then(({ data: sessionData, error }) => {
         if (!active) return;
         if (error) throw error;
-        if (sessionData.session) setReady(true);
-        else
+        if (sessionData.session) {
+          setReady(true);
+          setRecoveryAuthorized(hasValidRecoveryMarker(sessionData.session.user.id));
+        } else
           setNotice(
             "Open this page from a valid password reset link. Request a new link if it expired.",
           );
@@ -69,6 +113,7 @@ function ResetPassword() {
     try {
       const { error } = await supabase.auth.updateUser({ password: pw });
       if (error) throw error;
+      clearRecoveryMarker();
       await queryClient.cancelQueries();
       queryClient.clear();
       const { error: signOutError } = await supabase.auth.signOut({ scope: "local" });
@@ -87,7 +132,7 @@ function ResetPassword() {
       <div className="w-full max-w-sm rounded-lg border bg-card p-6">
         <h1 className="mb-4 text-xl font-semibold">Choose a new password</h1>
         {notice && <p className="mb-4 text-sm text-muted-foreground">{notice}</p>}
-        {!ready ? (
+        {!ready || !recoveryAuthorized ? (
           <p className="text-sm text-muted-foreground">
             Open this page from the reset link in your email. If the link expired, request a new one
             from the sign-in page.

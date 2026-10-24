@@ -16,6 +16,31 @@ export type InvitationStatus =
 
 export type WorkspaceRoute = "/dashboard" | "/portal";
 
+export function createPasswordRecoveryMarker(userId: string, expiresAt: number): string {
+  return JSON.stringify({ user_id: userId, expires_at: expiresAt });
+}
+
+export function isPasswordRecoveryMarkerValid(
+  marker: string | null,
+  userId: string,
+  now = Date.now(),
+): boolean {
+  if (!marker || !userId) return false;
+  try {
+    const value: unknown = JSON.parse(marker);
+    if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+    return (
+      "user_id" in value &&
+      value.user_id === userId &&
+      "expires_at" in value &&
+      typeof value.expires_at === "number" &&
+      value.expires_at > now
+    );
+  } catch {
+    return false;
+  }
+}
+
 const APP_ROLES: readonly AppRole[] = ["executive", "employee", "creator", "partner"];
 
 function isAppRole(value: string): value is AppRole {

@@ -5,9 +5,11 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("@/integrations/supabase/client", () => ({ supabase: {} }));
 
 import {
+  createPasswordRecoveryMarker,
   getInvitationToken,
   invitationInitialMode,
   invitationStatusMessage,
+  isPasswordRecoveryMarkerValid,
   isAuthLinkTypeAllowed,
   normalizeEmailAddress,
   parseInvitationStatus,
@@ -24,6 +26,15 @@ describe("invitation and authentication state helpers", () => {
 
   it("normalizes invited emails consistently", () => {
     expect(normalizeEmailAddress("  Creator@Example.Test ")).toBe("creator@example.test");
+  });
+
+  it("restores recovery authorization only for its user and unexpired session", () => {
+    const marker = createPasswordRecoveryMarker("user-1", 60_000);
+
+    expect(isPasswordRecoveryMarkerValid(marker, "user-1", 59_999)).toBe(true);
+    expect(isPasswordRecoveryMarkerValid(marker, "user-2", 59_999)).toBe(false);
+    expect(isPasswordRecoveryMarkerValid(marker, "user-1", 60_000)).toBe(false);
+    expect(isPasswordRecoveryMarkerValid("invalid-json", "user-1", 59_999)).toBe(false);
   });
 
   it("accepts provider magic-link types only for account setup links", () => {
