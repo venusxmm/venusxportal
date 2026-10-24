@@ -1,6 +1,7 @@
 # V1 stabilization
 
 ## Focused native Auth invitation repair
+- [x] Connect Team & Access to executive-authorized native invitation email with fixed Vercel callback; no schema change.
 - [x] Add native invite link handling, shared verification and password setup returning to login.
 - [x] Reject ordinary recovery visits; validate recovery link before showing the form.
 - [x] Run focused tests and public browser checks; compare public Vercel bundles.
