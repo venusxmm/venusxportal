@@ -54,6 +54,9 @@ function AuthPage() {
       const hash = window.location.hash;
       const token = getInvitationToken(search, hash);
       const params = authLinkParameters(search, hash);
+      if (params.get("setup") === "1" && active) {
+        setNotice("Your password is set. Sign in to continue.");
+      }
       if (new URLSearchParams(search).get("verified") === "1" && active) {
         setNotice("Email verified successfully. You can now sign in.");
       }
@@ -197,12 +200,20 @@ function AuthPage() {
           );
         }
         if (data.session) {
+          if (invite) await completeInvitation(invite);
           await queryClient.cancelQueries();
           queryClient.clear();
           const { error: signOutError } = await supabase.auth.signOut();
           if (signOutError) throw signOutError;
           setMode("in");
-          setNotice("Your account is verified. Sign in to continue.");
+          if (invite) {
+            window.history.replaceState(null, "", "/auth?setup=1");
+            setInvite(null);
+            setInviteStatus(null);
+            setNotice("Your password is set and your invitation is accepted. Sign in to continue.");
+          } else {
+            setNotice("Your account is ready. Sign in to continue.");
+          }
         } else {
           setSent(true);
           if (invite) setInviteStatus(await getInvitationStatus(invite));
@@ -331,6 +342,7 @@ function AuthPage() {
                     id="pw"
                     type="password"
                     required
+                    minLength={8}
                     autoComplete={mode === "up" ? "new-password" : "current-password"}
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
@@ -344,6 +356,7 @@ function AuthPage() {
                     id="pw-confirm"
                     type="password"
                     required
+                    minLength={8}
                     autoComplete="new-password"
                     value={passwordConfirmation}
                     onChange={(event) => setPasswordConfirmation(event.target.value)}

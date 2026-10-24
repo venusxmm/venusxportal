@@ -13,6 +13,14 @@ const creatorAuthMigration = readFileSync(
   resolve(process.cwd(), "drizzle/migrations/0019_creator_invitation_auth_flow.sql"),
   "utf8",
 );
+const creatorWorkspaceMigration = readFileSync(
+  resolve(process.cwd(), "drizzle/migrations/0020_creator_invitation_workspace_binding.sql"),
+  "utf8",
+);
+const memberRecoveryMigration = readFileSync(
+  resolve(process.cwd(), "drizzle/migrations/0021_explicit_member_recovery.sql"),
+  "utf8",
+);
 const ids = {
   executive: "00000000-0000-0000-0000-000000000001",
   employee: "00000000-0000-0000-0000-000000000002",
@@ -20,8 +28,10 @@ const ids = {
   wrongUser: "00000000-0000-0000-0000-000000000004",
   linkedUser: "00000000-0000-0000-0000-000000000005",
   creatorUser: "00000000-0000-0000-0000-000000000006",
-  missingUser: "00000000-0000-0000-0000-000000000007",
   unverifiedUser: "00000000-0000-0000-0000-000000000008",
+  revokedUser: "00000000-0000-0000-0000-000000000009",
+  removedUser: "00000000-0000-0000-0000-00000000000a",
+  revokedCreator: "00000000-0000-0000-0000-00000000000b",
 };
 const validToken = "a".repeat(64);
 
@@ -86,6 +96,15 @@ describe("invitation row-level security integration", () => {
         area public.work_area not null,
         primary key (user_id, area)
       );
+      create table public.audit_events (
+        id uuid primary key default gen_random_uuid(),
+        actor_id uuid,
+        entity text not null,
+        entity_id uuid,
+        action text not null,
+        details jsonb,
+        created_at timestamptz not null default now()
+      );
       create function auth.uid() returns uuid language sql stable as $$
         select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
       $$;
@@ -112,19 +131,29 @@ describe("invitation row-level security integration", () => {
               where user_id = _user_id and role = _role
             )
       $$;
-      insert into public.profiles (id) values
-          ('${ids.executive}'), ('${ids.employee}'), ('${ids.invitedUser}'),
-          ('${ids.wrongUser}'), ('${ids.linkedUser}');
+      insert into public.profiles (id, email) values
+          ('${ids.executive}', null), ('${ids.employee}', null), ('${ids.invitedUser}', null),
+          ('${ids.wrongUser}', null), ('${ids.linkedUser}', null),
+          ('${ids.revokedUser}', 'recover.creator@example.test'),
+          ('${ids.removedUser}', 'removed.member@example.test');
+      update public.profiles set access_revoked_at = now()
+        where id = '${ids.revokedUser}';
+      update public.profiles set access_revoked_at = now(), membership_removed_at = now()
+        where id = '${ids.removedUser}';
       insert into public.user_roles (user_id, role) values
         ('${ids.executive}', 'executive'), ('${ids.employee}', 'employee');
       insert into auth.users (id, email, email_confirmed_at) values
         ('${ids.executive}', 'executive@example.test', now()),
         ('${ids.employee}', 'employee@example.test', now()),
         ('${ids.invitedUser}', 'invited@example.test', now()),
-        ('${ids.wrongUser}', 'other@example.test', now());
+        ('${ids.wrongUser}', 'other@example.test', now()),
+        ('${ids.revokedUser}', 'recover.creator@example.test', now()),
+        ('${ids.removedUser}', 'removed.member@example.test', now());
     `);
     await db.exec(migration);
     await db.exec(creatorAuthMigration);
+    await db.exec(creatorWorkspaceMigration);
+    await db.exec(memberRecoveryMigration);
     await db.exec(`
       create trigger on_auth_user_created
       after insert on auth.users
@@ -198,6 +227,41 @@ describe("invitation row-level security integration", () => {
     expect(acceptedAgain.rows[0]?.accept_invitation).toBe(true);
   });
 
+  it("supports Executive and Partner invitations for an existing identity without duplicating its profile", async () => {
+    const existingUser = "00000000-0000-0000-0000-00000000000c";
+    await db.query(
+      `insert into auth.users (id, email, email_confirmed_at)
+       values ($1, 'existing.roles@example.test', now())`,
+      [existingUser],
+    );
+
+    for (const [role, token] of [
+      ["executive", "7".repeat(64)],
+      ["partner", "8".repeat(64)],
+    ] as const) {
+      await asUser(ids.executive, () =>
+        db.query(
+          `select public.create_invitation('existing.roles@example.test', '${token}', '${role}')`,
+        ),
+      );
+      const accepted = await asUser(existingUser, () =>
+        db.query<{ accept_invitation: boolean }>(`select public.accept_invitation('${token}')`),
+      );
+      expect(accepted.rows[0]?.accept_invitation).toBe(true);
+    }
+
+    const roles = await db.query<{ role: string }>(
+      "select role from public.user_roles where user_id = $1 order by role",
+      [existingUser],
+    );
+    expect(roles.rows).toEqual([{ role: "executive" }, { role: "partner" }]);
+    const profiles = await db.query<{ count: string }>(
+      "select count(*)::text as count from public.profiles where id = $1",
+      [existingUser],
+    );
+    expect(profiles.rows).toEqual([{ count: "1" }]);
+  });
+
   it("rejects expired and malformed invitation tokens", async () => {
     await db.query(
       `insert into public.invitations (email, token_hash, role, expires_at, created_by)
@@ -223,6 +287,134 @@ describe("invitation row-level security integration", () => {
         db.query(`select public.accept_invitation('${"c".repeat(64)}')`),
       ),
     ).rejects.toThrow(/invalid or expired/i);
+  });
+
+  it("keeps ordinary invitations from restoring revoked accounts and supports audited, explicit recovery", async () => {
+    const recoveryToken = "e".repeat(64);
+    await db.query("insert into public.creators (id, email, user_id) values ($1, $2, $3)", [
+      ids.revokedCreator,
+      "recover.creator@example.test",
+      ids.revokedUser,
+    ]);
+    await expect(
+      asUser(ids.executive, () =>
+        db.query(
+          `select public.create_invitation(
+            'recover.creator@example.test', '${recoveryToken}', 'creator'
+          )`,
+        ),
+      ),
+    ).rejects.toThrow(/access was revoked/i);
+
+    await expect(
+      asUser(ids.employee, () =>
+        db.query(
+          `select public.create_recovery_invitation(
+            '${ids.revokedUser}', '${recoveryToken}', 'creator', '{}', 'Restore approved Creator access'
+          )`,
+        ),
+      ),
+    ).rejects.toThrow(/only executives/i);
+
+    await expect(
+      asUser(ids.executive, () =>
+        db.query(
+          `select public.create_recovery_invitation(
+            '${ids.revokedUser}', '${"9".repeat(64)}', 'employee', '{}', 'Restore approved employee access'
+          )`,
+        ),
+      ),
+    ).rejects.toThrow(/only be recovered with the creator role/i);
+
+    await asUser(ids.executive, () =>
+      db.query(
+        `select public.create_recovery_invitation(
+          '${ids.revokedUser}', '${recoveryToken}', 'creator', '{}', 'Restore approved Creator access'
+        )`,
+      ),
+    );
+
+    await db.query("update auth.users set email = 'recover.creator@example.test' where id = $1", [
+      ids.wrongUser,
+    ]);
+    await expect(
+      asUser(ids.wrongUser, () => db.query(`select public.accept_invitation('${recoveryToken}')`)),
+    ).rejects.toThrow(/belongs to another account/i);
+
+    const accepted = await asUser(ids.revokedUser, () =>
+      db.query<{ accept_invitation: boolean }>(
+        `select public.accept_invitation('${recoveryToken}')`,
+      ),
+    );
+    expect(accepted.rows[0]?.accept_invitation).toBe(true);
+
+    const recovered = await db.query<{
+      access_revoked_at: string | null;
+      membership_removed_at: string | null;
+    }>("select access_revoked_at, membership_removed_at from public.profiles where id = $1", [
+      ids.revokedUser,
+    ]);
+    expect(recovered.rows[0]).toEqual({
+      access_revoked_at: null,
+      membership_removed_at: null,
+    });
+
+    const linkage = await db.query<{ user_id: string | null; role: string }>(
+      `select c.user_id, r.role
+       from public.creators c
+       join public.user_roles r on r.user_id = c.user_id
+       where c.id = $1`,
+      [ids.revokedCreator],
+    );
+    expect(linkage.rows).toEqual([{ user_id: ids.revokedUser, role: "creator" }]);
+
+    const audit = await db.query<{ action: string }>(
+      "select action from public.audit_events where entity_id = (select id from public.invitations where token_hash = $1) order by action",
+      [recoveryToken],
+    );
+    expect(audit.rows.map((row) => row.action)).toEqual([
+      "accept_recovery_invitation",
+      "create_recovery_invitation",
+    ]);
+  });
+
+  it("allows an explicitly approved recovery of a removed member only after the target accepts", async () => {
+    const recoveryToken = "f".repeat(64);
+    await asUser(ids.executive, () =>
+      db.query(
+        `select public.create_recovery_invitation(
+          '${ids.removedUser}', '${recoveryToken}', 'employee', '{}', 'Reinstate approved employee access'
+        )`,
+      ),
+    );
+
+    const beforeAcceptance = await db.query<{ is_active_member: boolean }>(
+      `select public.is_active_member('${ids.removedUser}')`,
+    );
+    expect(beforeAcceptance.rows[0]?.is_active_member).toBe(false);
+
+    const accepted = await asUser(ids.removedUser, () =>
+      db.query<{ complete_pending_invitation: boolean }>(
+        "select public.complete_pending_invitation()",
+      ),
+    );
+    expect(accepted.rows[0]?.complete_pending_invitation).toBe(true);
+
+    const afterAcceptance = await db.query<{
+      access_revoked_at: string | null;
+      membership_removed_at: string | null;
+    }>("select access_revoked_at, membership_removed_at from public.profiles where id = $1", [
+      ids.removedUser,
+    ]);
+    expect(afterAcceptance.rows[0]).toEqual({
+      access_revoked_at: null,
+      membership_removed_at: null,
+    });
+    const roles = await db.query<{ role: string }>(
+      "select role from public.user_roles where user_id = $1",
+      [ids.removedUser],
+    );
+    expect(roles.rows).toEqual([{ role: "employee" }]);
   });
 
   it("prevents non-executives from revoking invites and rejects revoked tokens", async () => {
@@ -310,12 +502,10 @@ describe("invitation row-level security integration", () => {
        values ($1, 'creator@example.test', now())`,
       [ids.creatorUser],
     );
-    await asUser(ids.executive, () =>
-      db.query(`select public.create_invitation('creator@example.test', '${token}', 'creator')`),
-    );
-
     await expect(
-      asUser(ids.creatorUser, () => db.query(`select public.accept_invitation('${token}')`)),
+      asUser(ids.executive, () =>
+        db.query(`select public.create_invitation('creator@example.test', '${token}', 'creator')`),
+      ),
     ).rejects.toThrow(/already linked to another account/i);
     const roles = await db.query("select role from public.user_roles where user_id = $1", [
       ids.creatorUser,
@@ -334,39 +524,30 @@ describe("invitation row-level security integration", () => {
        values ($1, 'duplicate@example.test', now())`,
       [ids.creatorUser],
     );
-    await asUser(ids.executive, () =>
-      db.query(
-        `select public.create_invitation('duplicate@example.test', '${duplicateToken}', 'creator')`,
-      ),
-    );
     await expect(
-      asUser(ids.creatorUser, () =>
-        db.query(`select public.accept_invitation('${duplicateToken}')`),
+      asUser(ids.executive, () =>
+        db.query(
+          `select public.create_invitation('duplicate@example.test', '${duplicateToken}', 'creator')`,
+        ),
       ),
     ).rejects.toThrow(/more than one active creator profile/i);
 
     const missingToken = "2".repeat(64);
-    await asUser(ids.executive, () =>
-      db.query(
-        `select public.create_invitation('missing@example.test', '${missingToken}', 'creator')`,
-      ),
-    );
-    await db.query(
-      `insert into auth.users (id, email, email_confirmed_at)
-       values ($1, 'missing@example.test', now())`,
-      [ids.missingUser],
-    );
     await expect(
-      asUser(ids.missingUser, () => db.query(`select public.accept_invitation('${missingToken}')`)),
+      asUser(ids.executive, () =>
+        db.query(
+          `select public.create_invitation('missing@example.test', '${missingToken}', 'creator')`,
+        ),
+      ),
     ).rejects.toThrow(/no active creator profile matches/i);
 
     const unverifiedToken = "3".repeat(64);
+    await db.query("insert into public.creators (email) values ('unverified@example.test')");
     await asUser(ids.executive, () =>
       db.query(
         `select public.create_invitation('unverified@example.test', '${unverifiedToken}', 'creator')`,
       ),
     );
-    await db.query("insert into public.creators (email) values ('unverified@example.test')");
     await db.query("insert into auth.users (id, email) values ($1, 'unverified@example.test')", [
       ids.unverifiedUser,
     ]);
