@@ -6,6 +6,7 @@ vi.mock("@/integrations/supabase/client", () => ({ supabase: {} }));
 
 import {
   createPasswordRecoveryMarker,
+  getSafeAuthConfirmationUrl,
   getInvitationToken,
   invitationInitialMode,
   invitationStatusMessage,
@@ -26,6 +27,31 @@ describe("invitation and authentication state helpers", () => {
 
   it("normalizes invited emails consistently", () => {
     expect(normalizeEmailAddress("  Creator@Example.Test ")).toBe("creator@example.test");
+  });
+
+  it("accepts only same-origin provider confirmation URLs", () => {
+    const authUrl = "https://project-ref.supabase.co";
+    const confirmationUrl =
+      "https://project-ref.supabase.co/auth/v1/verify?token=opaque&type=signup&redirect_to=https%3A%2F%2Fvenusxportal.vercel.app%2Fauth";
+
+    expect(
+      getSafeAuthConfirmationUrl(
+        `?confirmation_url=${encodeURIComponent(confirmationUrl)}`,
+        authUrl,
+      ),
+    ).toBe(confirmationUrl);
+    expect(
+      getSafeAuthConfirmationUrl(
+        `?confirmation_url=${encodeURIComponent("https://attacker.example/auth/v1/verify?token=x&type=signup")}`,
+        authUrl,
+      ),
+    ).toBeNull();
+    expect(
+      getSafeAuthConfirmationUrl(
+        `?confirmation_url=${encodeURIComponent("https://project-ref.supabase.co/other?token=x&type=signup")}`,
+        authUrl,
+      ),
+    ).toBeNull();
   });
 
   it("restores recovery authorization only for its user and unexpired session", () => {

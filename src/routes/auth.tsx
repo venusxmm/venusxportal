@@ -9,6 +9,7 @@ import {
   authLinkParameters,
   completeInvitation,
   verifyAuthLink,
+  getSafeAuthConfirmationUrl,
   invitationInitialMode,
   invitationStatusMessage,
   normalizeEmailAddress,
@@ -42,6 +43,7 @@ function AuthPage() {
   const [password, setPassword] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
   const [passwordSetupRequired, setPasswordSetupRequired] = useState(false);
+  const [confirmationUrl, setConfirmationUrl] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
@@ -67,6 +69,20 @@ function AuthPage() {
           throw new Error(
             "This authentication link is invalid or expired. Request a new link or sign in.",
           );
+        }
+        if (new URLSearchParams(search).has("confirmation_url")) {
+          const authUrl = import.meta.env["VITE_SUPABASE_URL"] || process.env["SUPABASE_URL"];
+          const safeConfirmationUrl = authUrl ? getSafeAuthConfirmationUrl(search, authUrl) : null;
+          if (!safeConfirmationUrl) {
+            throw new Error(
+              "This confirmation link is invalid. Request a new email and try again.",
+            );
+          }
+          if (active) {
+            setConfirmationUrl(safeConfirmationUrl);
+            setNotice("Confirm your email to continue.");
+          }
+          return;
         }
         // Handle provider OTP links for invitations before rendering the password form.
         if (["signup", "email", "magiclink"].includes(params.get("type") ?? "")) {
@@ -409,7 +425,14 @@ function AuthPage() {
                 : "Resend confirmation email"}
           </Button>
         )}
-        {sent ? (
+        {confirmationUrl ? (
+          <div className="space-y-4 rounded-lg border bg-card p-6 text-center text-sm">
+            <p>Continue to verify your email and finish signing in.</p>
+            <Button className="w-full" onClick={() => window.location.assign(confirmationUrl)}>
+              Confirm email
+            </Button>
+          </div>
+        ) : sent ? (
           <div className="space-y-4 rounded-lg border bg-card p-6 text-center text-sm">
             <p>
               Check <b>{email}</b> for the link to{" "}

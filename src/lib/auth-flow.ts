@@ -51,6 +51,29 @@ export function normalizeEmailAddress(email: string): string {
   return email.trim().toLowerCase();
 }
 
+export function getSafeAuthConfirmationUrl(search: string, authUrl: string): string | null {
+  const confirmationUrl = new URLSearchParams(search).get("confirmation_url");
+  if (!confirmationUrl) return null;
+
+  try {
+    const candidate = new URL(confirmationUrl);
+    const authOrigin = new URL(authUrl).origin;
+    const type = candidate.searchParams.get("type");
+    if (
+      candidate.protocol !== "https:" ||
+      candidate.origin !== authOrigin ||
+      candidate.pathname !== "/auth/v1/verify" ||
+      !candidate.searchParams.has("token") ||
+      !["signup", "email", "magiclink", "recovery"].includes(type ?? "")
+    ) {
+      return null;
+    }
+    return candidate.toString();
+  } catch {
+    return null;
+  }
+}
+
 export function getInvitationToken(search: string, hash: string): string | null {
   const queryToken = new URLSearchParams(search).get("invite");
   const hashToken = new URLSearchParams(hash.replace(/^#/, "")).get("invite");
