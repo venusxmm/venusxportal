@@ -278,7 +278,7 @@ function Team() {
                           disabled={removeMember.isPending}
                           onClick={() =>
                             confirm(
-                              `Remove ${p.nickname || p.full_name || p.email} from Team & Access? Their sign-in identity will remain for historical references, but without roles or work areas they will not have portal access. Existing invitations and role grants cannot restore removed access.`,
+                              `Remove ${p.nickname || p.full_name || p.email} from Team & Access? Their sign-in identity will remain for historical references, but without roles or work areas they will not have portal access. Old links and role grants cannot restore access; only a new invitation they accept can.`,
                             ) && removeMember.mutate(p.id)
                           }
                         >
