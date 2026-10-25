@@ -83,6 +83,7 @@ beforeAll(async () => {
   await db.exec(`create table if not exists public.audit_events(id uuid default gen_random_uuid(),actor_id uuid,entity text,entity_id uuid,action text,details jsonb,created_at timestamptz default now())`);
   await db.exec(readFileSync("drizzle/migrations/0032_task_trash_lifecycle.sql", "utf8").replaceAll("--> statement-breakpoint", ""));
   await db.exec(readFileSync("drizzle/migrations/0033_task_edit_in_place_early_complete.sql", "utf8").replaceAll("--> statement-breakpoint", ""));
+  await db.exec(readFileSync("drizzle/migrations/0034_task_future_complete.sql", "utf8").replaceAll("--> statement-breakpoint", ""));
 }, 30000);
 afterAll(async () => {
   await db.close();
