@@ -211,6 +211,13 @@
       "when": 1792958432706,
       "tag": "0029_task_occurrence_schedule_independence",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1792961223080,
+      "tag": "0030_task_portal_blocks_today_edits",
+      "breakpoints": true
     }
   ]
 }
