@@ -94,10 +94,7 @@ const tone: Record<string, string> = {
 
 export function Pill({ value, label }: { value: string; label?: string | undefined }) {
   return (
-    <Badge
-      variant="outline"
-      className={cn("text-[11px] font-medium", tone[value])}
-    >
+    <Badge variant="outline" className={cn("text-[11px] font-medium", tone[value])}>
       {label ?? value.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase())}
     </Badge>
   );
