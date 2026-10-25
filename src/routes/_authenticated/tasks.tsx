@@ -141,6 +141,12 @@ function Tasks() {
       }))
     : BOARD_BLOCKS;
   const [editingBlocks, setEditingBlocks] = useState(false);
+  const creatorUsers: Record<string, string | null> = Object.fromEntries(
+    (creators.data ?? []).map((c) => [c.id, c.user_id]),
+  );
+  const creatorOwnerIds = new Set(
+    (creators.data ?? []).flatMap((c) => (c.user_id ? [c.user_id] : [])),
+  );
   const configurations = useQuery({
     queryKey: ["tasks", "configurations"],
     enabled: !!me?.isExec,
@@ -740,7 +746,14 @@ function Tasks() {
                         ? "Every day"
                         : t.weekdays.map((d) => WEEKDAYS[d]).join(", ")}{" "}
                     · {t.recurrence_state}
+                    {t.due_time ? ` · ${formatTime12(t.due_time)}` : ""}
                   </p>
+                  {!ownerCreatorConsistent(t, creatorUsers, creatorOwnerIds) && (
+                    <p className="mt-1 text-xs text-warning">
+                      Needs Review · Owner and Linked Creator don't match, so it isn't shown in any
+                      Creator's Portal. Edit to fix.
+                    </p>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   <Button variant="outline" className="min-h-11" onClick={() => setEditing(t)}>
