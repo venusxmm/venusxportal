@@ -1,0 +1,1 @@
+DO $$ DECLARE definition text; BEGIN SELECT pg_get_functiondef('public.move_task_execution(uuid,uuid,date,time,date)'::regprocedure) INTO definition; definition:=replace(definition,'eid:=_id;','eid:=nullif(_id,''00000000-0000-0000-0000-000000000000''::uuid);'); EXECUTE definition; END $$;

@@ -197,6 +197,13 @@
       "when": 1792958100502,
       "tag": "0027_task_board_movement_publication_archive",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1792958186620,
+      "tag": "0028_task_move_projected_input_guard",
+      "breakpoints": true
     }
   ]
 }
