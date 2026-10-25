@@ -57,9 +57,9 @@ beforeAll(async () => {
  create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
  create type public.task_priority as enum('low','medium','high','critical'); create type public.task_status as enum('todo','in_progress','blocked','review','done');
  create table public.tasks(id uuid primary key default gen_random_uuid(),title text not null,description text,owner_id uuid,creator_id uuid,visible_to_creator boolean not null default false,priority task_priority default 'medium',status task_status default 'todo',due_date date,due_time time,created_by uuid,created_at timestamptz default now(),completed_at timestamptz,archived_at timestamptz);
- create table creators(id uuid primary key,archived_at timestamptz);
+ create table creators(id uuid primary key,archived_at timestamptz,user_id uuid);
  create function is_own_creator(uuid) returns boolean language sql stable as $$select $1=auth.uid()$$;
- insert into creators(id) values('${other}');
+ insert into creators(id,user_id) values('${other}','${other}');
  create table task_comments(id uuid default gen_random_uuid(),task_id uuid,author_id uuid,body text,created_at timestamptz default now());
  grant usage on schema public,auth to authenticated; grant select,insert,update,delete on tasks,task_comments to authenticated;
  alter table tasks enable row level security; alter table task_comments enable row level security;
@@ -78,6 +78,7 @@ beforeAll(async () => {
   await db.exec(
     readFileSync("drizzle/migrations/0029_task_occurrence_schedule_independence.sql", "utf8"),
   );
+  await db.exec(readFileSync(process.env.M30 ?? "drizzle/migrations/0030_task_portal_blocks_today_edits.sql", "utf8"));
 }, 30000);
 afterAll(async () => {
   await db.close();
@@ -322,6 +323,7 @@ describe("execution security and recurrence SQL", () => {
     const published = await create({
       recurrence: "once",
       creator_id: other,
+      owner_id: other,
       visible_to_creator: true,
     });
     const eid = await execution(published, "2026-10-25");
