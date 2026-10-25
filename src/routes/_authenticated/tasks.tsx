@@ -389,7 +389,7 @@ function Tasks() {
           ) : (
             <span />
           )}
-          {me?.isExec && !t.projected && (
+          {me?.isExec && !t.projected && (["history", "archive"].includes(view) || status === "done") && (
             <label
               className="flex items-center gap-1 text-xs text-muted-foreground"
               title={deleteIneligible(t) ?? "Select for deletion"}
