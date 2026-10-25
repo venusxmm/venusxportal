@@ -165,7 +165,7 @@ function Portal() {
           size="sm"
           className="min-h-11"
           variant={t.status === "done" ? "outline" : "default"}
-          disabled={complete.isPending || future || t.projected || t.status === "skipped"}
+          disabled={complete.isPending || t.projected || t.status === "skipped"}
           onClick={() => complete.mutate({ id: t.id, done: t.status !== "done" })}
         >
           {t.status === "done" ? "Undo" : t.status === "skipped" ? "Skipped" : "Complete"}
