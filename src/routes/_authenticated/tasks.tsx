@@ -295,6 +295,13 @@ function Tasks() {
         (a.scheduled_date ?? "9999").localeCompare(b.scheduled_date ?? "9999") ||
         (a.due_time ?? "24:00").localeCompare(b.due_time ?? "24:00"),
     );
+  const deleteIneligible = (t: Execution) =>
+    t.archived_at
+      ? "Already deleted"
+      : t.status !== "done"
+        ? "Only completed executions can be bulk deleted"
+        : null;
+  const eligible = rows.filter((t) => !t.projected && !deleteIneligible(t));
   const active = rows.filter((t) => !["done", "skipped", "cancelled"].includes(t.status));
   const overdue = active.filter((t) => executionOverdue(t, now));
   const todayRows = active.filter((t) => t.scheduled_date === date);
@@ -341,14 +348,21 @@ function Tasks() {
           ) : (
             <span />
           )}
-          {me?.isExec && t.status === "done" && (
-            <Checkbox
-              aria-label={`Select ${t.title}`}
-              checked={selected.includes(t.id)}
-              onCheckedChange={(checked) =>
-                setSelected((ids) => (checked ? [...ids, t.id] : ids.filter((id) => id !== t.id)))
-              }
-            />
+          {me?.isExec && !t.projected && (
+            <label
+              className="flex items-center gap-1 text-xs text-muted-foreground"
+              title={deleteIneligible(t) ?? "Select for deletion"}
+            >
+              {deleteIneligible(t) && <span className="hidden sm:inline">{deleteIneligible(t)}</span>}
+              <Checkbox
+                aria-label={`Select ${t.title}`}
+                disabled={!!deleteIneligible(t)}
+                checked={selected.includes(t.id)}
+                onCheckedChange={(checked) =>
+                  setSelected((ids) => (checked ? [...ids, t.id] : ids.filter((id) => id !== t.id)))
+                }
+              />
+            </label>
           )}
         </div>
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
@@ -612,21 +626,33 @@ function Tasks() {
         rows.some((t) => t.status === "done") && (
           <div className="flex flex-wrap gap-2">
             <Button
-              variant="outline"
+              variant="ghost"
               onClick={() =>
-                setDeleting(rows.filter((t) => t.status === "done" && selected.includes(t.id)))
+                setSelected(
+                  selected.length === eligible.length ? [] : eligible.map((t) => t.id),
+                )
               }
-              disabled={!rows.some((t) => t.status === "done" && selected.includes(t.id))}
+              disabled={!eligible.length}
             >
-              <Trash2 className="h-4 w-4" />
-              Delete Selected Completed
+              {selected.length && selected.length === eligible.length
+                ? "Clear Selection"
+                : `Select All (${eligible.length})`}
             </Button>
             <Button
               variant="outline"
-              onClick={() => setDeleting(rows.filter((t) => t.status === "done"))}
+              onClick={() => setDeleting(eligible.filter((t) => selected.includes(t.id)))}
+              disabled={!eligible.some((t) => selected.includes(t.id))}
             >
               <Trash2 className="h-4 w-4" />
-              Delete Filtered Completed ({rows.filter((t) => t.status === "done").length})
+              Delete Selected Completed ({eligible.filter((t) => selected.includes(t.id)).length})
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setDeleting(eligible)}
+              disabled={!eligible.length}
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete Filtered Completed ({eligible.length})
             </Button>
           </div>
         )}
