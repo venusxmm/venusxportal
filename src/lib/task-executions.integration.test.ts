@@ -227,6 +227,7 @@ describe("execution security and recurrence SQL", () => {
   });
   it("rejects a skip request without stopping the next daily execution", async () => {
     const tid = await create({});
+    await as(owner, "select task_agenda('2026-10-25')");
     const eid = await execution(tid, "2026-10-25");
     await as(owner, "select task_execution_action($1,'request_skip')", [eid]);
     await as(exec, "select task_execution_action($1,'reject_skip')", [eid]);
