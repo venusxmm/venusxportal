@@ -30,6 +30,7 @@ import {
   BOARD_BLOCKS,
   blockForTime,
   currentBlock,
+  msToNextMinute,
   timeInBlock,
   canMoveExecution,
   titleCase,
@@ -95,8 +96,19 @@ function Tasks() {
   const [selected, setSelected] = useState<string[]>([]);
   const [deleting, setDeleting] = useState<Execution[]>([]);
   useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 30000);
-    return () => clearInterval(timer);
+    // One clock, re-aligned to each minute boundary so "Now" switches blocks on time.
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = () => {
+      const next = new Date();
+      setNow((prev) => {
+        const prevDay = agencyDate(prev);
+        setDate((d) => (d === prevDay ? agencyDate(next) : d));
+        return next;
+      });
+      timer = setTimeout(tick, msToNextMinute(next));
+    };
+    timer = setTimeout(tick, msToNextMinute());
+    return () => clearTimeout(timer);
   }, []);
   const agenda = useQuery({
     queryKey: ["tasks", "agenda", date, me?.id],

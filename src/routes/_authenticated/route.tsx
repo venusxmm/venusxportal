@@ -42,11 +42,6 @@ const NAV: NavItem[] = [
   { to: "/finance", label: "Finance", show: (m) => m.isExec },
   { to: "/team", label: "Team & Access", show: (m) => m.isExec },
   { to: "/audit", label: "Audit Log", show: (m) => m.isExec },
-  { to: "", label: "Marketing", show: (m) => m.isStaff, soon: true },
-  { to: "", label: "Chatting", show: (m) => m.isStaff, soon: true },
-  { to: "", label: "Academy", show: () => true, soon: true },
-  { to: "", label: "VenusX Credits", show: (m) => m.isStaff, soon: true },
-  { to: "", label: "Consigliere", show: (m) => m.isExec, soon: true },
 ];
 
 function Shell() {
