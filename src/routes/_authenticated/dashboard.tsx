@@ -4,7 +4,14 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useMe } from "@/lib/me";
 import { summarize, money } from "@/lib/finance";
-import { EmptyState, Loading, PageHeader, Pill, Stat, isOverdue } from "@/components/portal";
+import { EmptyState, Loading, PageHeader, Pill, Stat } from "@/components/portal";
+import {
+  agencyDate,
+  executionOverdue,
+  formatTime12,
+  sortPortalTasks,
+  type Execution,
+} from "@/lib/task-executions";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -93,18 +100,16 @@ function Setup() {
 
 function StaffOverview() {
   const { data: me } = useMe();
+  // Same source as the Tasks Daily Schedule/Overdue views: permission-scoped executions,
+  // trashed/purged excluded server-side. Key under "tasks" so task mutations refresh it.
+  const today = agencyDate();
   const tasks = useQuery({
-    queryKey: ["tasks", "overview"],
+    queryKey: ["tasks", "agenda", today, me?.id, "overview"],
+    enabled: !!me,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("tasks")
-        .select("id,title,status,priority,due_date,owner_id,creators(stage_name)")
-        .is("archived_at", null)
-        .neq("status", "done")
-        .order("due_date", { ascending: true, nullsFirst: false })
-        .limit(200);
+      const { data, error } = await supabase.rpc("task_agenda", { _date: today });
       if (error) throw error;
-      return data;
+      return data as unknown as Execution[];
     },
   });
   const creators = useQuery({
@@ -134,9 +139,19 @@ function StaffOverview() {
     },
   });
 
-  const all = tasks.data ?? [];
+  const now = new Date();
+  const seen = new Set<string>();
+  const all = sortPortalTasks(
+    (tasks.data ?? []).filter(
+      (t) =>
+        !t.archived_at &&
+        !["done", "skipped", "cancelled"].includes(t.status) &&
+        !seen.has(`${t.task_id}:${t.occurrence_date ?? t.scheduled_date}`) &&
+        !!seen.add(`${t.task_id}:${t.occurrence_date ?? t.scheduled_date}`),
+    ),
+  );
   const mine = all.filter((t) => t.owner_id === me?.id);
-  const overdue = all.filter((t) => isOverdue(t.due_date, t.status));
+  const overdue = all.filter((t) => executionOverdue(t, now));
   const critical = all.filter((t) => t.priority === "critical");
   const list = me?.isExec ? all : mine;
   const fin = summarize(txns.data ?? []);
