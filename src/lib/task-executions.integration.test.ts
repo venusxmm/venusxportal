@@ -642,7 +642,6 @@ describe("early completion of a future recurring occurrence", () => {
   const dated = (tid: string) =>
     db.query<{ d: string; status: string }>("select scheduled_date::text d,status from task_executions where task_id=$1 and archived_at is null order by 1", [tid]);
   it("completes only that date, idempotently, and reopens only that date", async () => {
-    console.log("DBG", (await db.query("select substring(pg_get_functiondef('task_future_action(uuid,date,text,text)'::regprocedure) from 'IF _action[^;]*') d")).rows[0]);
     const tid = await create({ recurrence: "daily", due_date: "2030-02-01", due_time: "06:35" });
     await expect(as(other, "select task_future_action($1,'2030-02-03','complete')", [tid])).rejects.toThrow();
     const a = ((await as(owner, "select task_future_action($1,'2030-02-03','complete') as id", [tid])).rows[0] as { id: string }).id;
