@@ -35,6 +35,7 @@ beforeAll(async()=>{
  insert into tasks(title,owner_id,due_date) values('Existing preserved','${owner}','2026-10-24');`);
  await db.exec(migration);
  await db.exec(guards);
+ await db.exec(readFileSync('drizzle/migrations/0026_task_future_revision_editing.sql','utf8'));
 },30000);
 afterAll(async()=>{await db.close()});
 describe('execution security and recurrence SQL',()=>{
@@ -113,7 +114,7 @@ describe('execution security and recurrence SQL',()=>{
   const r=await as(owner,"select task_future_action($1,'2026-10-26','request_skip','Away') as id",[tid]);
   const eid=(r.rows[0] as {id:string}).id;
   const agenda=await as(owner,"select task_agenda('2026-10-26') as agenda");
-  expect((agenda.rows[0] as {agenda:{task_id:string}[]}).agenda.filter(e=>e.task_id===tid)).toHaveLength(1);
+  expect((agenda.rows[0] as {agenda:{task_id:string,scheduled_date:string}[]}).agenda.filter(e=>e.task_id===tid && e.scheduled_date==='2026-10-26')).toHaveLength(1);
   await as(exec,"select task_execution_action($1,'approve_skip')",[eid]);
   expect((await db.query('select status from task_executions where id=$1',[eid])).rows).toEqual([{status:'skipped'}]);
  });

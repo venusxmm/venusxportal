@@ -136,7 +136,10 @@ function Tasks() {
       action: string;
       body?: string | undefined;
     }) => {
-      const { error } = await supabase.rpc("task_execution_action", {
+      const { error } = task.projected && task.scheduled_date ? await supabase.rpc("task_future_action", {
+        _task_id: task.task_id, _date: task.scheduled_date, _action: action,
+        ...(body === undefined ? {} : { _body: body }),
+      }) : await supabase.rpc("task_execution_action", {
         _id: task.id,
         _action: action,
         ... (body === undefined ? {} : { _body: body }),
@@ -334,7 +337,9 @@ function Tasks() {
           )}
         </TabsList>
       </Tabs>
-      <div className="grid min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+      <details className="group border-b pb-3" open={search !== "" || priority !== "all" || owner !== "all" || creator !== "all" || status !== "all"}>
+      <summary className="cursor-pointer text-sm font-medium">Filters</summary>
+      <div className="mt-3 grid min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-5">
         <Input
           aria-label="Search tasks"
           placeholder="Search tasks"
@@ -387,6 +392,7 @@ function Tasks() {
           </>
         )}
       </div>
+      </details>
       {agenda.error ? (
         <ErrorNote error={agenda.error} retry={() => agenda.refetch()} />
       ) : agenda.isLoading ? (
@@ -486,7 +492,7 @@ function Tasks() {
         <ExecutionDetails
           task={currentDetails}
           executive={!!me?.isExec}
-          allowed={!!me && canExecute(currentDetails, me.id, me.isExec)}
+          allowed={!!me && currentDetails.status !== "cancelled" && (me.isExec || currentDetails.owner_id === me.id)}
           pending={action.isPending}
           onClose={() => setDetails(null)}
           onAction={(act, body) => action.mutate({ task: currentDetails, action: act, body })}
