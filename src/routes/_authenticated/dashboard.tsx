@@ -223,18 +223,13 @@ function StaffOverview() {
                 className="flex items-center gap-3 px-4 py-3 text-sm hover:bg-accent"
               >
                 <span className="flex-1 truncate">{t.title}</span>
-                {t.creators?.stage_name && (
-                  <span className="hidden text-muted-foreground sm:inline">
-                    {t.creators.stage_name}
-                  </span>
-                )}
                 <Pill value={t.priority} />
                 <span
                   className={
-                    isOverdue(t.due_date, t.status) ? "text-destructive" : "text-muted-foreground"
+                    executionOverdue(t, now) ? "text-destructive" : "text-muted-foreground"
                   }
                 >
-                  {t.due_date ?? "—"}
+                  {t.scheduled_date ?? "—"} · {formatTime12(t.due_time)}
                 </span>
               </Link>
             ))}
