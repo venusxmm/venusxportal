@@ -11,12 +11,15 @@ import {
   executionOverdue,
   formatTime12,
   portalStatus,
+  portalVisible,
   recurrenceLabel,
   shiftDate,
   sortPortalTasks,
   type Execution,
 } from "@/lib/task-executions";
 import { Progress } from "@/components/ui/progress";
+import { useEffect } from "react";
+import { msToNextMinute } from "@/lib/task-board";
 
 export const Route = createFileRoute("/_authenticated/portal")({
   head: () => ({
@@ -90,6 +93,21 @@ function Portal() {
       );
     },
   });
+  useEffect(() => {
+    // Refetch at the Bogotá day boundary so the next occurrence appears while the portal stays open.
+    let day = agencyDate();
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = () => {
+      const next = agencyDate();
+      if (next !== day) {
+        day = next;
+        qc.invalidateQueries({ queryKey: ["tasks", "portal"] });
+      }
+      timer = setTimeout(tick, msToNextMinute());
+    };
+    timer = setTimeout(tick, msToNextMinute());
+    return () => clearTimeout(timer);
+  }, [qc]);
   const complete = useMutation({
     mutationFn: async ({ id, done }: { id: string; done: boolean }) => {
       const { error } = await supabase.rpc("task_execution_action", {
@@ -110,10 +128,13 @@ function Portal() {
         body="If you accepted a Creator invitation, confirm that your email is verified and matches one active Creator profile. Otherwise, ask an Executive to verify the Creator email and invitation. Access is not granted until the association is confirmed."
       />
     );
-  const ts = sortPortalTasks(
-    (tasks.data ?? []).filter((t) => t.visible_to_creator && t.owner_id === me.id),
-  );
   const today = agencyDate();
+  const ts = sortPortalTasks(
+    portalVisible(
+      (tasks.data ?? []).filter((t) => t.visible_to_creator && t.owner_id === me.id),
+      today,
+    ),
+  );
   const pending = ts.filter((t) => !["done", "skipped"].includes(t.status));
   const completed = ts.filter((t) => ["done", "skipped"].includes(t.status));
   const pct = ts.length ? Math.round((completed.length / ts.length) * 100) : 0;
