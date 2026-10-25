@@ -82,6 +82,7 @@ beforeAll(async () => {
   await db.exec(readFileSync("drizzle/migrations/0031_task_portal_blocks_today_edits_apply.sql", "utf8"));
   await db.exec(`create table if not exists public.audit_events(id uuid default gen_random_uuid(),actor_id uuid,entity text,entity_id uuid,action text,details jsonb,created_at timestamptz default now())`);
   await db.exec(readFileSync("drizzle/migrations/0032_task_trash_lifecycle.sql", "utf8").replaceAll("--> statement-breakpoint", ""));
+  await db.exec(readFileSync("drizzle/migrations/0033_task_edit_in_place_early_complete.sql", "utf8").replaceAll("--> statement-breakpoint", ""));
 }, 30000);
 afterAll(async () => {
   await db.close();
@@ -300,7 +301,7 @@ describe("execution security and recurrence SQL", () => {
       (b.rows[0] as { agenda: { task_id: string }[] }).agenda.some((e) => e.task_id === tid),
     ).toBe(false);
   });
-  it("keeps today's one-time snapshot when the executive edits future instructions", async () => {
+  it("edits a one-time task in place instead of cancelling and copying it", async () => {
     const tid = await create({ recurrence: "once" });
     await as(exec, "select save_task_configuration($1,$2::jsonb)", [
       tid,
@@ -313,21 +314,16 @@ describe("execution security and recurrence SQL", () => {
       }),
     ]);
     const rows = await db.query(
-      "select title,description,owner_id,scheduled_date::text from task_executions where task_id=$1 order by scheduled_date",
+      "select title,description,owner_id,scheduled_date::text,status from task_executions where task_id=$1 order by scheduled_date",
       [tid],
     );
     expect(rows.rows).toEqual([
       {
-        title: "Isolated QA",
-        description: "Original",
-        owner_id: owner,
-        scheduled_date: "2026-10-25",
-      },
-      {
         title: "Future instructions",
         description: "New",
         owner_id: other,
-        scheduled_date: "2026-10-26",
+        scheduled_date: "2026-10-25",
+        status: "todo",
       },
     ]);
   });
@@ -606,3 +602,37 @@ function shiftDay(d: string) {
   return x.toISOString().slice(0, 10);
 }
 
+
+describe("early completion and editing in place", () => {
+  const edit = (tid: string, cfg: Record<string, unknown>) =>
+    as(exec, "select save_task_configuration($1,$2::jsonb)", [tid, JSON.stringify({ title: "Isolated QA", owner_id: owner, recurrence: "once", ...cfg })]);
+  const rows = (tid: string) =>
+    db.query<{ id: string; status: string; d: string | null }>("select id,status,scheduled_date::text d from task_executions where task_id=$1 and archived_at is null order by created_at", [tid]);
+  it("owner completes days before the deadline; strangers cannot", async () => {
+    const tid = await create({ recurrence: "once", due_date: "2030-01-10" });
+    const id = (await rows(tid)).rows[0]!.id;
+    await expect(as(other, "select task_execution_action($1,'complete')", [id])).rejects.toThrow();
+    await as(owner, "select task_execution_action($1,'complete')", [id]);
+    expect((await rows(tid)).rows[0]!.status).toBe("done");
+    await as(owner, "select task_execution_action($1,'reopen')", [id]);
+    expect((await rows(tid)).rows[0]!.status).toBe("todo");
+  });
+  it("clearing or moving a deadline edits the same execution, never cancels", async () => {
+    const tid = await create({ recurrence: "once", due_date: "2030-01-10" });
+    const id = (await rows(tid)).rows[0]!.id;
+    await edit(tid, { due_date: "2030-01-05" });
+    await edit(tid, { due_date: "" });
+    const r = (await rows(tid)).rows;
+    expect(r).toEqual([{ id, status: "todo", d: null }]);
+    expect((await db.query("select 1 from task_executions where task_id=$1 and status='cancelled'", [tid])).rows).toHaveLength(0);
+    await as(owner, "select task_execution_action($1,'complete')", [id]);
+    expect((await rows(tid)).rows[0]!.status).toBe("done");
+  });
+  it("editing a completed task keeps it completed", async () => {
+    const tid = await create({ recurrence: "once", due_date: "2030-01-10" });
+    const id = (await rows(tid)).rows[0]!.id;
+    await as(owner, "select task_execution_action($1,'complete')", [id]);
+    await edit(tid, { due_date: "", description: "changed" });
+    expect((await rows(tid)).rows).toEqual([{ id, status: "done", d: "2030-01-10" }]);
+  });
+});

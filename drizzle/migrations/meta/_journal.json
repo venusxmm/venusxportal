@@ -232,6 +232,13 @@
       "when": 1792962477004,
       "tag": "0032_task_trash_lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1792970592354,
+      "tag": "0033_task_edit_in_place_early_complete",
+      "breakpoints": true
     }
   ]
 }
