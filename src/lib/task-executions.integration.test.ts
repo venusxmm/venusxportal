@@ -3,6 +3,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { readFileSync } from 'node:fs';
 import { beforeAll, afterAll, describe, it, expect } from 'vitest';
 const migration = readFileSync('drizzle/migrations/0024_task_executions_owner_security.sql','utf8');
+const guards = readFileSync('drizzle/migrations/0025_task_execution_configuration_guards.sql','utf8');
 let db: PGlite;
 const exec='00000000-0000-0000-0000-000000000001';
 const owner='00000000-0000-0000-0000-000000000002';
@@ -33,11 +34,12 @@ beforeAll(async()=>{
  create function is_executive() returns boolean language sql stable as $$select auth.uid()='${exec}'::uuid$$;
  insert into tasks(title,owner_id,due_date) values('Existing preserved','${owner}','2026-10-24');`);
  await db.exec(migration);
+ await db.exec(guards);
 },30000);
 afterAll(async()=>{await db.close()});
 describe('execution security and recurrence SQL',()=>{
  it('preserves existing tasks and backs up execution snapshots',async()=>{
-  const r=await db.query(`select e.title,e.scheduled_date from task_executions e join tasks t on t.id=e.task_id where t.title='Existing preserved'`);
+  const r=await db.query(`select e.title,e.scheduled_date::text from task_executions e join tasks t on t.id=e.task_id where t.title='Existing preserved'`);
   expect(r.rows).toEqual([{title:'Existing preserved',scheduled_date:'2026-10-24'}]);
  });
  it.each(['employee','creator','partner'])('restricts %s-style owner access and denies configuration edits',async()=>{
@@ -101,5 +103,18 @@ describe('execution security and recurrence SQL',()=>{
   expect((await as(other,'select id from task_execution_events where execution_id=$1',[eid])).rows).toHaveLength(0);
   expect((await as(owner,'select body from task_execution_events where execution_id=$1',[eid])).rows).toEqual([{body:'Owner comment'}]);
   await expect(as(owner,"update task_executions set description='Hacked' where id=$1",[eid])).rejects.toThrow(/permission denied/);
+ });
+ it('supports the new-task sentinel used by the UI',async()=>{
+  const r=await as(exec,"select save_task_configuration('00000000-0000-0000-0000-000000000000',$1::jsonb) as id",[JSON.stringify({title:'UI new task',recurrence:'once',due_date:'2026-10-25'})]);
+  expect((r.rows[0] as {id:string}).id).toMatch(/^[a-f0-9-]{36}$/);
+ });
+ it('allows future skip requests without duplicate projected executions',async()=>{
+  const tid=await create({});
+  const r=await as(owner,"select task_future_action($1,'2026-10-26','request_skip','Away') as id",[tid]);
+  const eid=(r.rows[0] as {id:string}).id;
+  const agenda=await as(owner,"select task_agenda('2026-10-26') as agenda");
+  expect((agenda.rows[0] as {agenda:{task_id:string}[]}).agenda.filter(e=>e.task_id===tid)).toHaveLength(1);
+  await as(exec,"select task_execution_action($1,'approve_skip')",[eid]);
+  expect((await db.query('select status from task_executions where id=$1',[eid])).rows).toEqual([{status:'skipped'}]);
  });
 });
