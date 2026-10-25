@@ -23,6 +23,8 @@ import {
   shiftDate,
   executionOverdue,
   canExecute,
+  formatTime12,
+  ownerCreatorConsistent,
   type Execution,
 } from "@/lib/task-executions";
 import {
@@ -32,6 +34,8 @@ import {
   timeInBlock,
   canMoveExecution,
   titleCase,
+  validateBlocks,
+  type BoardBlock,
 } from "@/lib/task-board";
 import { Checkbox } from "@/components/ui/checkbox";
 import { EmptyState, ErrorNote, Loading, PageHeader, Pill } from "@/components/portal";
@@ -880,11 +884,15 @@ function Tasks() {
       {moving && (
         <MoveDialog
           task={moving}
+          blocks={blocks}
           rows={agenda.data ?? []}
           pending={move.isPending}
           onClose={() => setMoving(null)}
           onSave={(time, targetDate) => move.mutate({ task: moving, time, targetDate })}
         />
+      )}
+      {editingBlocks && me?.isExec && (
+        <TimeBlocksDialog blocks={blocks} onClose={() => setEditingBlocks(false)} />
       )}
       {deletingTask && me?.isExec && (
         <Dialog open onOpenChange={(open) => !open && setDeletingTask(null)}>
@@ -1405,12 +1413,14 @@ function ConfigurationDialog({
 
 function MoveDialog({
   task,
+  blocks,
   rows,
   pending,
   onClose,
   onSave,
 }: {
   task: Execution;
+  blocks: BoardBlock[];
   rows: Execution[];
   pending: boolean;
   onClose: () => void;
@@ -1429,18 +1439,18 @@ function MoveDialog({
           <Label>Move To Time Block</Label>
           <Filter
             label="Move To Time Block"
-            value={blockForTime(time)?.id ?? "morning"}
+            value={blockForTime(time, blocks)?.id ?? blocks[0]?.id ?? ""}
             onChange={(id) => {
-              const block = BOARD_BLOCKS.find((b) => b.id === id);
+              const block = blocks.find((b) => b.id === id);
               if (block) {
                 const next = timeInBlock(block, { ...task, scheduled_date: date }, rows);
                 if (next) setTime(next);
                 else toast.error("This block is full. Choose a time.");
               }
             }}
-            options={BOARD_BLOCKS.map((b) => ({
+            options={blocks.map((b) => ({
               value: b.id,
-              label: `${b.label} · ${b.start}–${b.end}`,
+              label: `${b.label} · ${formatTime12(b.start)}–${formatTime12(b.end)}`,
             }))}
           />
           <Label htmlFor="move-date">Date</Label>
@@ -1465,6 +1475,111 @@ function MoveDialog({
             </Button>
             <Button disabled={pending || !date || !time} onClick={() => onSave(time, date)}>
               Save Schedule
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function TimeBlocksDialog({ blocks, onClose }: { blocks: BoardBlock[]; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [draft, setDraft] = useState<BoardBlock[]>(blocks.map((b) => ({ ...b })));
+  const error = validateBlocks(draft);
+  const save = useMutation({
+    mutationFn: async (next: BoardBlock[]) => {
+      const { data: existing, error: readError } = await supabase
+        .from("task_time_blocks")
+        .select("id");
+      if (readError) throw readError;
+      const rows = next.map((b, position) => ({
+        label: b.label.trim(),
+        start_time: b.start,
+        end_time: b.end === "24:00" ? "00:00" : b.end,
+        position,
+      }));
+      const { error: insertError } = await supabase.from("task_time_blocks").insert(rows);
+      if (insertError) throw insertError;
+      const old = (existing ?? []).map((r) => r.id);
+      if (old.length) {
+        const { error: deleteError } = await supabase
+          .from("task_time_blocks")
+          .delete()
+          .in("id", old);
+        if (deleteError) throw deleteError;
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tasks", "time-blocks"] });
+      toast.success("Time blocks saved; task times unchanged");
+      onClose();
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+  const set = (i: number, patch: Partial<BoardBlock>) =>
+    setDraft((d) => d.map((b, j) => (j === i ? { ...b, ...patch } : b)));
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Edit Time Blocks</DialogTitle>
+          <DialogDescription>
+            Tasks group automatically by their time. Blocks may cross midnight but must not
+            overlap. Task dates and times never change.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          {draft.map((b, i) => (
+            <div key={b.id} className="grid grid-cols-[minmax(0,1fr)_6.5rem_6.5rem_auto] gap-2">
+              <Input
+                aria-label="Block name"
+                value={b.label}
+                maxLength={40}
+                onChange={(e) => set(i, { label: e.target.value })}
+              />
+              <Input
+                aria-label={`${b.label} start`}
+                type="time"
+                value={b.start}
+                onChange={(e) => set(i, { start: e.target.value })}
+              />
+              <Input
+                aria-label={`${b.label} end`}
+                type="time"
+                value={b.end === "24:00" ? "00:00" : b.end}
+                onChange={(e) => set(i, { end: e.target.value === "00:00" ? "24:00" : e.target.value })}
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={`Remove ${b.label}`}
+                onClick={() => setDraft((d) => d.filter((_, j) => j !== i))}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <div className="flex flex-wrap justify-between gap-2">
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() =>
+                  setDraft((d) => [
+                    ...d,
+                    { id: `new-${Date.now()}`, label: "New Block", start: "12:00", end: "13:00" },
+                  ])
+                }
+              >
+                Add Block
+              </Button>
+              <Button variant="ghost" onClick={() => setDraft(BOARD_BLOCKS.map((b) => ({ ...b })))}>
+                Reset Defaults
+              </Button>
+            </div>
+            <Button disabled={!!error || !draft.length || save.isPending} onClick={() => save.mutate(draft)}>
+              Save Blocks
             </Button>
           </div>
         </div>
