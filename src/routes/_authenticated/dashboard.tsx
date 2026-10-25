@@ -8,7 +8,19 @@ import { EmptyState, Loading, PageHeader, Pill, Stat, isOverdue } from "@/compon
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
-  head: () => ({ meta: [{ title: "Overview — VenusX Portal" }] }),
+  head: () => ({
+    meta: [
+      { title: "Overview — VenusX Portal" },
+      { name: "description", content: "View your VenusX agency overview and assigned work." },
+      { property: "og:title", content: "Overview — VenusX Portal" },
+      {
+        property: "og:description",
+        content: "View your VenusX agency overview and assigned work.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
   component: Dashboard,
 });
 

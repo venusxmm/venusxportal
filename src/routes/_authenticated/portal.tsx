@@ -10,7 +10,22 @@ import { agencyDate, executionOverdue, type Execution } from "@/lib/task-executi
 import { Progress } from "@/components/ui/progress";
 
 export const Route = createFileRoute("/_authenticated/portal")({
-  head: () => ({ meta: [{ title: "My Portal — VenusX" }] }),
+  head: () => ({
+    meta: [
+      { title: "My Portal — VenusX Portal" },
+      {
+        name: "description",
+        content: "View your assigned and explicitly shared VenusX executions and earnings.",
+      },
+      { property: "og:title", content: "My Portal — VenusX Portal" },
+      {
+        property: "og:description",
+        content: "View your assigned and explicitly shared VenusX executions and earnings.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
   component: Portal,
 });
 
