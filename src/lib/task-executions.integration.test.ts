@@ -301,7 +301,7 @@ describe("execution security and recurrence SQL", () => {
       (b.rows[0] as { agenda: { task_id: string }[] }).agenda.some((e) => e.task_id === tid),
     ).toBe(false);
   });
-  it("keeps today's one-time snapshot when the executive edits future instructions", async () => {
+  it("edits a one-time task in place instead of cancelling and copying it", async () => {
     const tid = await create({ recurrence: "once" });
     await as(exec, "select save_task_configuration($1,$2::jsonb)", [
       tid,
@@ -314,21 +314,16 @@ describe("execution security and recurrence SQL", () => {
       }),
     ]);
     const rows = await db.query(
-      "select title,description,owner_id,scheduled_date::text from task_executions where task_id=$1 order by scheduled_date",
+      "select title,description,owner_id,scheduled_date::text,status from task_executions where task_id=$1 order by scheduled_date",
       [tid],
     );
     expect(rows.rows).toEqual([
       {
-        title: "Isolated QA",
-        description: "Original",
-        owner_id: owner,
-        scheduled_date: "2026-10-25",
-      },
-      {
         title: "Future instructions",
         description: "New",
         owner_id: other,
-        scheduled_date: "2026-10-26",
+        scheduled_date: "2026-10-25",
+        status: "todo",
       },
     ]);
   });
