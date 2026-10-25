@@ -61,8 +61,9 @@ function Team() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("invitations")
-        .select("id,email,role,expires_at,accepted_at,revoked_at")
-        .order("created_at", { ascending: false });
+        .select("id,email,role,expires_at,accepted_at,revoked_at,delivery_status,delivery_method,delivery_error,last_sent_at")
+        .order("created_at", { ascending: false })
+        .limit(25);
       if (error) throw error;
       return data ?? [];
     },
@@ -303,31 +304,55 @@ function Team() {
   );
 }
 
+function invitationState(item: InvitationRow) {
+  if (item.accepted_at) return "Accepted";
+  if (item.revoked_at) return "Cancelled";
+  if (new Date(item.expires_at) <= new Date()) return "Expired";
+  if (item.delivery_status === "failed") return "Pending · email failed";
+  if (item.delivery_status === "sent") {
+    return item.delivery_method === "sign_in_link" ? "Pending · sign-in link sent" : "Pending · invitation sent";
+  }
+  return "Pending · delivery unconfirmed";
+}
+
+type InvitationRow = {
+  id: string;
+  email: string;
+  role: AppRole;
+  expires_at: string;
+  accepted_at: string | null;
+  revoked_at: string | null;
+  delivery_status: string;
+  delivery_method: string | null;
+  delivery_error: string | null;
+  last_sent_at: string | null;
+};
+
 function InvitationPanel({
   invitations,
   onChanged,
 }: {
-  invitations: {
-    id: string;
-    email: string;
-    role: AppRole;
-    expires_at: string;
-    accepted_at: string | null;
-    revoked_at: string | null;
-  }[];
+  invitations: InvitationRow[];
   onChanged: () => void;
 }) {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<AppRole>("employee");
   const [busy, setBusy] = useState(false);
   const sendInvitation = useServerFn(sendNativeInvitation);
-  const create = async () => {
-    if (!email.trim()) return;
+  const send = async (target: string, targetRole: AppRole) => {
     setBusy(true);
     try {
-      await sendInvitation({ data: { email: email.trim(), role } });
-      toast.success("Invitation email requested. The member can set a password from the email link.");
-      setEmail("");
+      const result = await sendInvitation({ data: { email: target.trim(), role: targetRole } });
+      if (result.status === "sent") {
+        toast.success(
+          result.method === "sign_in_link"
+            ? "This email already has an account. A sign-in link was sent; access is granted when they open it."
+            : "Invitation email sent. The member sets a password from the email link.",
+        );
+        setEmail("");
+      } else {
+        toast.error(`Email not sent: ${result.error} The invitation stays pending; resend or cancel it.`);
+      }
       onChanged();
     } catch (error) {
       toast.error((error as Error).message);
@@ -339,7 +364,7 @@ function InvitationPanel({
     const { error } = await supabase.rpc("revoke_invitation", { _id: id });
     if (error) toast.error(error.message);
     else {
-      toast.success("Invitation revoked");
+      toast.success("Invitation cancelled");
       onChanged();
     }
   };
@@ -347,7 +372,7 @@ function InvitationPanel({
     <section className="mt-6 rounded-lg border bg-card p-5">
       <h2 className="font-medium">Invitations</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        New members receive an account invitation by email.
+        New members receive an account invitation. Existing accounts receive a sign-in link; access is granted only when that person accepts.
       </p>
       <div className="mt-4 flex flex-wrap items-end gap-2">
         <div className="min-w-0 basis-full flex-1 space-y-1 sm:basis-auto">
@@ -374,37 +399,39 @@ function InvitationPanel({
             </SelectContent>
           </Select>
         </div>
-        <Button disabled={busy || !email.trim()} onClick={create}>
+        <Button disabled={busy || !email.trim()} onClick={() => send(email, role)}>
           Send invitation
         </Button>
       </div>
       <div className="mt-4 divide-y rounded-md border">
-        {invitations
-          .filter(
-            (item) =>
-              !item.accepted_at && !item.revoked_at && new Date(item.expires_at) > new Date(),
-          )
-          .map((item) => (
-            <div
-              key={item.id}
-              className="flex flex-wrap items-center justify-between gap-3 p-3 text-sm"
-            >
+        {invitations.map((item) => {
+          const state = invitationState(item);
+          const pending = state.startsWith("Pending");
+          return (
+            <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 p-3 text-sm">
               <span className="min-w-0 break-all">
                 {item.email} · {item.role.replace(/^./, (letter) => letter.toUpperCase())}
                 <span className="ml-2 text-xs text-muted-foreground">
-                  expires {new Date(item.expires_at).toLocaleDateString()}
+                  {state}
+                  {pending && ` · expires ${new Date(item.expires_at).toLocaleDateString()}`}
                 </span>
+                {pending && item.delivery_status === "failed" && item.delivery_error && (
+                  <span className="block text-xs text-destructive">{item.delivery_error}</span>
+                )}
               </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-destructive"
-                onClick={() => revoke(item.id)}
-              >
-                Revoke
-              </Button>
+              {pending && (
+                <span className="flex gap-1">
+                  <Button variant="ghost" size="sm" disabled={busy} onClick={() => send(item.email, item.role)}>
+                    Resend
+                  </Button>
+                  <Button variant="ghost" size="sm" className="text-destructive" onClick={() => revoke(item.id)}>
+                    Cancel
+                  </Button>
+                </span>
+              )}
             </div>
-          ))}
+          );
+        })}
       </div>
     </section>
   );
