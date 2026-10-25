@@ -176,6 +176,13 @@
       "when": 1792956824436,
       "tag": "0024_task_executions_owner_security",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1792957069715,
+      "tag": "0025_task_execution_configuration_guards",
+      "breakpoints": true
     }
   ]
 }

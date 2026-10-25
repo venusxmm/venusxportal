@@ -775,6 +775,15 @@ export type Database = {
         Args: { _action: string; _body?: string; _id: string }
         Returns: undefined
       }
+      task_future_action: {
+        Args: {
+          _action: string
+          _body?: string
+          _date: string
+          _task_id: string
+        }
+        Returns: string
+      }
     }
     Enums: {
       app_role: "executive" | "employee" | "creator" | "partner"
