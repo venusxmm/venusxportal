@@ -67,3 +67,28 @@ export function sortPortalTasks<T extends { scheduled_date?: string | null; due_
       (a.due_time?.slice(0, 5) ?? "99:99").localeCompare(b.due_time?.slice(0, 5) ?? "99:99"),
   );
 }
+const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+/** Plain-language recurrence label for creator-facing views. */
+export function recurrenceLabel(mode: string | null | undefined, weekdays: number[] = []) {
+  if (mode === "daily") return "Daily";
+  if (mode === "weekdays")
+    return `Weekly: ${[...weekdays].sort().map((d) => DAY_NAMES[d]).join(", ")}`;
+  return "One time";
+}
+/** Portal publication is only coherent when the owner is the linked creator's own account. */
+export function ownerCreatorConsistent(
+  t: { owner_id: string | null; creator_id: string | null; visible_to_creator?: boolean },
+  creatorUserIds: Record<string, string | null>,
+  creatorOwnerIds: Set<string>,
+) {
+  if (t.owner_id && creatorOwnerIds.has(t.owner_id))
+    return !!t.creator_id && creatorUserIds[t.creator_id] === t.owner_id;
+  if (t.visible_to_creator) return !!t.creator_id && creatorUserIds[t.creator_id] === t.owner_id;
+  return true;
+}
+/** 24h "15:00[:00]" to "3:00 PM". */
+export function formatTime12(time: string | null | undefined) {
+  if (!time) return "No time";
+  const [h = 0, m = 0] = time.split(":").map(Number);
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+}
