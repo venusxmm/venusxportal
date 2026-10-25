@@ -162,7 +162,7 @@ function Tasks() {
       targetDate?: string;
     }) => {
       const { error } = await supabase.rpc("move_task_execution", {
-        _id: task.projected ? undefined : task.id,
+        _id: task.projected ? "00000000-0000-0000-0000-000000000000" : task.id,
         _task_id: task.task_id,
         _occurrence_date: task.occurrence_date ?? task.scheduled_date ?? date,
         _time: time,
@@ -243,7 +243,7 @@ function Tasks() {
   const rows = (view === "history" ? (history.data ?? []) : (agenda.data ?? []))
     .filter(
       (t) =>
-        !t.archived_at &&
+        (view === "archive" ? !!t.archived_at : !t.archived_at) &&
         t.title.toLowerCase().includes(search.toLowerCase()) &&
         (priority === "all" || t.priority === priority) &&
         (owner === "all" || t.owner_id === owner) &&
