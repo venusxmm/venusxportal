@@ -225,6 +225,13 @@
       "when": 1792961257553,
       "tag": "0031_task_portal_blocks_today_edits_apply",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1792962477004,
+      "tag": "0032_task_trash_lifecycle",
+      "breakpoints": true
     }
   ]
 }

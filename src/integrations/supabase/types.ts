@@ -379,6 +379,7 @@ export type Database = {
           occurrence_date: string | null
           owner_id: string | null
           priority: Database["public"]["Enums"]["task_priority"]
+          purged_at: string | null
           recurring: boolean
           revision_id: string | null
           scheduled_date: string | null
@@ -387,6 +388,7 @@ export type Database = {
           status: string
           task_id: string
           title: string
+          trashed_by_series: boolean
           visible_to_creator: boolean
         }
         Insert: {
@@ -400,6 +402,7 @@ export type Database = {
           occurrence_date?: string | null
           owner_id?: string | null
           priority?: Database["public"]["Enums"]["task_priority"]
+          purged_at?: string | null
           recurring?: boolean
           revision_id?: string | null
           scheduled_date?: string | null
@@ -408,6 +411,7 @@ export type Database = {
           status?: string
           task_id: string
           title: string
+          trashed_by_series?: boolean
           visible_to_creator?: boolean
         }
         Update: {
@@ -421,6 +425,7 @@ export type Database = {
           occurrence_date?: string | null
           owner_id?: string | null
           priority?: Database["public"]["Enums"]["task_priority"]
+          purged_at?: string | null
           recurring?: boolean
           revision_id?: string | null
           scheduled_date?: string | null
@@ -429,6 +434,7 @@ export type Database = {
           status?: string
           task_id?: string
           title?: string
+          trashed_by_series?: boolean
           visible_to_creator?: boolean
         }
         Relationships: [
@@ -557,6 +563,8 @@ export type Database = {
           source: string
           status: Database["public"]["Enums"]["task_status"]
           title: string
+          trashed_at: string | null
+          trashed_by: string | null
           updated_at: string
           visible_to_creator: boolean
           weekdays: number[]
@@ -580,6 +588,8 @@ export type Database = {
           source?: string
           status?: Database["public"]["Enums"]["task_status"]
           title: string
+          trashed_at?: string | null
+          trashed_by?: string | null
           updated_at?: string
           visible_to_creator?: boolean
           weekdays?: number[]
@@ -603,6 +613,8 @@ export type Database = {
           source?: string
           status?: Database["public"]["Enums"]["task_status"]
           title?: string
+          trashed_at?: string | null
+          trashed_by?: string | null
           updated_at?: string
           visible_to_creator?: boolean
           weekdays?: number[]
@@ -821,8 +833,21 @@ export type Database = {
         }
         Returns: string
       }
+      purge_task_executions: {
+        Args: { _confirm_count: number; _ids: string[] }
+        Returns: number
+      }
+      purge_tasks: {
+        Args: { _confirm_count: number; _ids: string[] }
+        Returns: number
+      }
       remove_team_member: { Args: { _user_id: string }; Returns: boolean }
       resolve_creator_link: { Args: never; Returns: string }
+      restore_task_executions: {
+        Args: { _confirm_count: number; _ids: string[] }
+        Returns: number
+      }
+      restore_task_series: { Args: { _task_id: string }; Returns: number }
       revoke_invitation: { Args: { _id: string }; Returns: boolean }
       revoke_team_member_access: {
         Args: { _user_id: string }
@@ -850,6 +875,7 @@ export type Database = {
         Args: { _date: string; _task_id: string }
         Returns: string
       }
+      trash_task_series: { Args: { _task_id: string }; Returns: number }
     }
     Enums: {
       app_role: "executive" | "employee" | "creator" | "partner"

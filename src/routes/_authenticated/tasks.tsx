@@ -24,7 +24,6 @@ import {
   executionOverdue,
   canExecute,
   formatTime12,
-  ownerCreatorConsistent,
   type Execution,
 } from "@/lib/task-executions";
 import {
@@ -108,18 +107,6 @@ function Tasks() {
       return data as unknown as Execution[];
     },
   });
-  const history = useQuery({
-    queryKey: ["tasks", "history", me?.id],
-    enabled: !!me && ["history", "archive"].includes(view),
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("task_executions")
-        .select("*")
-        .order("scheduled_date", { ascending: false });
-      if (error) throw error;
-      return data as Execution[];
-    },
-  });
   const blockRows = useQuery({
     queryKey: ["tasks", "time-blocks"],
     enabled: !!me,
@@ -173,31 +160,17 @@ function Tasks() {
       }));
     },
   });
-  const [deletingTask, setDeletingTask] = useState<Task | null>(null);
-  const stopSeries = useMutation({
-    mutationFn: async (t: Task) => {
-      const { error } = await supabase.rpc("save_task_configuration", {
-        _task_id: t.id,
-        _config: {
-          title: t.title,
-          description: t.description ?? "",
-          owner_id: t.owner_id ?? "",
-          creator_id: t.creator_id ?? "",
-          priority: t.priority,
-          due_date: t.due_date ?? agencyDate(),
-          due_time: t.due_time?.slice(0, 5) ?? "",
-          recurrence: t.recurrence,
-          weekdays: t.weekdays,
-          recurrence_state: "disabled",
-          visible_to_creator: t.visible_to_creator,
-        },
-      });
+  const [deleteChoice, setDeleteChoice] = useState<Execution | null>(null);
+  const trashSeries = useMutation({
+    mutationFn: async (taskId: string) => {
+      const { error } = await supabase.rpc("trash_task_series", { _task_id: taskId });
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tasks"] });
-      setDeletingTask(null);
-      toast.success("Task disabled; past executions and history kept");
+      setDeleteChoice(null);
+      setDetails(null);
+      toast.success("Moved to Trash; restore it from Trash anytime");
     },
     onError: (e) => toast.error((e as Error).message),
   });
@@ -213,12 +186,6 @@ function Tasks() {
       return data;
     },
   });
-  const creatorUsers: Record<string, string | null> = Object.fromEntries(
-    (creators.data ?? []).map((c) => [c.id, c.user_id]),
-  );
-  const creatorOwnerIds = new Set(
-    (creators.data ?? []).flatMap((c) => (c.user_id ? [c.user_id] : [])),
-  );
   const move = useMutation({
     mutationFn: async ({
       task,
@@ -263,7 +230,7 @@ function Tasks() {
       const { error } = await supabase.rpc("archive_task_executions", {
         _ids: tasks.map((t) => t.id),
         _confirm_count: tasks.length,
-        _completed_only: tasks.length > 1,
+        _completed_only: false,
       });
       if (error) throw error;
     },
@@ -271,9 +238,10 @@ function Tasks() {
       qc.invalidateQueries({ queryKey: ["tasks"] });
       qc.invalidateQueries({ queryKey: ["execution-events"] });
       setDeleting([]);
+      setDeleteChoice(null);
       setSelected([]);
       setDetails(null);
-      toast.success("Executions archived; history preserved");
+      toast.success("Moved to Trash; other dates unchanged");
     },
     onError: (error) => toast.error(error.message),
   });
@@ -318,10 +286,10 @@ function Tasks() {
     },
     onError: (error) => toast.error(error.message),
   });
-  const rows = (["history", "archive"].includes(view) ? (history.data ?? []) : (agenda.data ?? []))
+  const rows = (agenda.data ?? [])
     .filter(
       (t) =>
-        (view === "archive" ? !!t.archived_at : !t.archived_at) &&
+        !t.archived_at &&
         t.title.toLowerCase().includes(search.toLowerCase()) &&
         (priority === "all" || t.priority === priority) &&
         (owner === "all" || t.owner_id === owner) &&
@@ -336,13 +304,11 @@ function Tasks() {
         (a.scheduled_date ?? "9999").localeCompare(b.scheduled_date ?? "9999") ||
         (a.due_time ?? "24:00").localeCompare(b.due_time ?? "24:00"),
     );
-  const deleteIneligible = (t: Execution) =>
-    t.archived_at
-      ? "Already deleted"
-      : t.status !== "done"
-        ? "Only completed executions can be bulk deleted"
-        : null;
-  const eligible = rows.filter((t) => !t.projected && !deleteIneligible(t));
+  const eligible = rows.filter((t) => !t.projected && t.status !== "cancelled");
+  const isSeries = (t: Execution) => {
+    const c = configurations.data?.find((x) => x.id === t.task_id);
+    return c ? c.recurrence !== "once" : t.recurring;
+  };
   const active = rows.filter((t) => !["done", "skipped", "cancelled"].includes(t.status));
   const overdue = active.filter((t) => executionOverdue(t, now));
   const todayRows = active.filter((t) => t.scheduled_date === date);
@@ -389,21 +355,14 @@ function Tasks() {
           ) : (
             <span />
           )}
-          {me?.isExec && !t.projected && (["history", "archive"].includes(view) || status === "done") && (
-            <label
-              className="flex items-center gap-1 text-xs text-muted-foreground"
-              title={deleteIneligible(t) ?? "Select for deletion"}
-            >
-              {deleteIneligible(t) && <span className="hidden sm:inline">{deleteIneligible(t)}</span>}
-              <Checkbox
-                aria-label={`Select ${t.title}`}
-                disabled={!!deleteIneligible(t)}
-                checked={selected.includes(t.id)}
-                onCheckedChange={(checked) =>
-                  setSelected((ids) => (checked ? [...ids, t.id] : ids.filter((id) => id !== t.id)))
-                }
-              />
-            </label>
+          {me?.isExec && view === "list" && !t.projected && (
+            <Checkbox
+              aria-label={`Select ${t.title}`}
+              checked={selected.includes(t.id)}
+              onCheckedChange={(checked) =>
+                setSelected((ids) => (checked ? [...ids, t.id] : ids.filter((id) => id !== t.id)))
+              }
+            />
           )}
         </div>
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
@@ -496,13 +455,15 @@ function Tasks() {
               Move
             </Button>
           )}
-          {!t.archived_at &&
-            t.status !== "cancelled" &&
-            (!t.projected || (!!t.scheduled_date && t.scheduled_date > agencyDate(now))) &&
-            (me?.isExec || t.owner_id === me?.id) && (
-            <Button variant="ghost" size="sm" onClick={() => setDeleting([t])}>
+          {me?.isExec && !t.archived_at && t.status !== "cancelled" && (
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label={`Delete ${t.title}`}
+              onClick={() => setDeleteChoice(t)}
+            >
               <Trash2 className="h-4 w-4" />
-              Delete Execution
+              Delete
             </Button>
           )}
         </div>
@@ -524,7 +485,6 @@ function Tasks() {
   );
   const currentDetails = details
     ? ((agenda.data ?? []).find((t) => t.id === details.id) ??
-      history.data?.find((t) => t.id === details.id) ??
       details)
     : null;
   if (me?.isCreator && !me.isStaff) return <Navigate to="/portal" />;
@@ -603,17 +563,11 @@ function Tasks() {
           <TabsTrigger className="min-h-11" value="board">
             Board
           </TabsTrigger>
-          <TabsTrigger className="min-h-11" value="history">
-            History
-          </TabsTrigger>
           {me?.isExec && (
-            <TabsTrigger className="min-h-11" value="manage">
-              Manage
+            <TabsTrigger className="min-h-11" value="trash">
+              Trash
             </TabsTrigger>
           )}
-          <TabsTrigger className="min-h-11" value="archive">
-            Archive
-          </TabsTrigger>
         </TabsList>
       </Tabs>
       <details
@@ -681,111 +635,37 @@ function Tasks() {
           )}
         </div>
       </details>
-      {me?.isExec &&
-        (["history", "archive"].includes(view) || view === "board" || status === "done") &&
-        rows.some((t) => t.status === "done") && (
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="ghost"
-              onClick={() =>
-                setSelected(
-                  selected.length === eligible.length ? [] : eligible.map((t) => t.id),
-                )
-              }
-              disabled={!eligible.length}
-            >
-              {selected.length > 0 && selected.length === eligible.length
-                ? "Clear Selection"
-                : `Select All (${eligible.length})`}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setDeleting(eligible.filter((t) => selected.includes(t.id)))}
-              disabled={!eligible.some((t) => selected.includes(t.id))}
-            >
-              <Trash2 className="h-4 w-4" />
-              Delete Selected Completed ({eligible.filter((t) => selected.includes(t.id)).length})
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setDeleting(eligible)}
-              disabled={!eligible.length}
-            >
-              <Trash2 className="h-4 w-4" />
-              Delete Filtered Completed ({eligible.length})
-            </Button>
-          </div>
-        )}
+      {me?.isExec && view === "list" && eligible.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="ghost"
+            onClick={() =>
+              setSelected(selected.length === eligible.length ? [] : eligible.map((t) => t.id))
+            }
+          >
+            {selected.length > 0 && selected.length === eligible.length
+              ? "Clear Selection"
+              : `Select All (${eligible.length})`}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setDeleting(eligible.filter((t) => selected.includes(t.id)))}
+            disabled={!eligible.some((t) => selected.includes(t.id))}
+          >
+            <Trash2 className="h-4 w-4" />
+            Move Selected Occurrences To Trash (
+            {eligible.filter((t) => selected.includes(t.id)).length})
+          </Button>
+        </div>
+      )}
       {agenda.error ? (
         <ErrorNote error={agenda.error} retry={() => agenda.refetch()} />
       ) : agenda.isLoading ? (
         <Loading />
-      ) : view === "manage" && me?.isExec ? (
-        <div className="space-y-3">
-          {configurations.error && <ErrorNote error={configurations.error} />}
-          {(configurations.data ?? [])
-            .filter(
-              (t) =>
-                t.title.toLowerCase().includes(search.toLowerCase()) &&
-                (owner === "all" || t.owner_id === owner) &&
-                (creator === "all" || t.creator_id === creator) &&
-                (priority === "all" || t.priority === priority),
-            )
-            .map((t) => (
-              <article
-                key={t.id}
-                className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border bg-card p-4"
-              >
-                <div className="min-w-0">
-                  <h3 className="break-words font-medium">{t.title}</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {who(t.owner_id)} ·{" "}
-                    {t.recurrence === "once"
-                      ? "One-time"
-                      : t.recurrence === "daily"
-                        ? "Every day"
-                        : t.weekdays.map((d) => WEEKDAYS[d]).join(", ")}{" "}
-                    · {t.recurrence_state}
-                    {t.due_time ? ` · ${formatTime12(t.due_time)}` : ""}
-                  </p>
-                  {!ownerCreatorConsistent(t, creatorUsers, creatorOwnerIds) && (
-                    <p className="mt-1 text-xs text-warning">
-                      Needs Review · Owner and Linked Creator don't match, so it isn't shown in any
-                      Creator's Portal. Edit to fix.
-                    </p>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" className="min-h-11" onClick={() => setEditing(t)}>
-                    <Pencil className="h-4 w-4" />
-                    Edit
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="min-h-11"
-                    aria-label={`Delete ${t.title}`}
-                    onClick={() => setDeletingTask(t)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Delete
-                  </Button>
-                </div>
-              </article>
-            ))}
-        </div>
+      ) : view === "trash" && me?.isExec ? (
+        <TrashView search={search} who={who} />
       ) : view === "overdue" ? (
         section("Overdue · Original Dates", overdue)
-      ) : ["history", "archive"].includes(view) ? (
-        <div className="space-y-4">
-          {history.error && <ErrorNote error={history.error} />}
-          {history.isLoading ? (
-            <Loading />
-          ) : rows.length ? (
-            [...rows].reverse().map(renderCard)
-          ) : (
-            <EmptyState title="No history matches" />
-          )}
-        </div>
       ) : view === "board" ? (
         <div className="grid gap-6 lg:grid-cols-3">
           {["todo", "done", "skipped"].map((s) => (
@@ -913,28 +793,49 @@ function Tasks() {
       {editingBlocks && me?.isExec && (
         <TimeBlocksDialog blocks={blocks} onClose={() => setEditingBlocks(false)} />
       )}
-      {deletingTask && me?.isExec && (
-        <Dialog open onOpenChange={(open) => !open && setDeletingTask(null)}>
+      {deleteChoice && me?.isExec && (
+        <Dialog open onOpenChange={(open) => !open && setDeleteChoice(null)}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Delete “{deletingTask.title}”?</DialogTitle>
+              <DialogTitle>Delete “{deleteChoice.title}”?</DialogTitle>
               <DialogDescription>
-                This disables the whole task
-                {deletingTask.recurrence === "once" ? "" : " and its recurring series"}: no future
-                executions will be created. Past executions, completions and comments stay in
-                History. To remove only one day, use “Delete Execution” on that day's card instead.
+                {isSeries(deleteChoice)
+                  ? "Choose what to delete. Both go to Trash and can be restored."
+                  : "This one-time task moves to Trash and disappears from every view and Creator's Portal. You can restore it from Trash."}
               </DialogDescription>
             </DialogHeader>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setDeletingTask(null)}>
+            <div className="grid gap-2">
+              {isSeries(deleteChoice) ? (
+                <>
+                  <Button
+                    variant="outline"
+                    className="min-h-11"
+                    disabled={archive.isPending || trashSeries.isPending}
+                    onClick={() => archive.mutate([deleteChoice])}
+                  >
+                    Delete This Occurrence ({deleteChoice.scheduled_date ?? "No date"})
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    className="min-h-11"
+                    disabled={archive.isPending || trashSeries.isPending}
+                    onClick={() => trashSeries.mutate(deleteChoice.task_id)}
+                  >
+                    Delete Entire Series
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  variant="destructive"
+                  className="min-h-11"
+                  disabled={trashSeries.isPending}
+                  onClick={() => trashSeries.mutate(deleteChoice.task_id)}
+                >
+                  Move To Trash
+                </Button>
+              )}
+              <Button variant="ghost" onClick={() => setDeleteChoice(null)}>
                 Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                disabled={stopSeries.isPending}
-                onClick={() => stopSeries.mutate(deletingTask)}
-              >
-                {deletingTask.recurrence === "once" ? "Delete task" : "Stop recurring series"}
               </Button>
             </div>
           </DialogContent>
@@ -945,17 +846,13 @@ function Tasks() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>
-                Delete {deleting.length} Execution{deleting.length === 1 ? "" : "s"}?
+                Move {deleting.length} Occurrence{deleting.length === 1 ? "" : "s"} To Trash?
               </DialogTitle>
               <DialogDescription>
-                Comments and history will be retained in the archive. Recurring rules and future
-                executions remain unchanged.
+                Only these dated occurrences move to Trash. Recurring rules and other dates are not
+                changed.
               </DialogDescription>
             </DialogHeader>
-            <p className="text-sm">
-              {deleting.length} record{deleting.length === 1 ? "" : "s"} will be removed from the
-              agenda.
-            </p>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setDeleting([])}>
                 Cancel
@@ -965,7 +862,7 @@ function Tasks() {
                 disabled={archive.isPending}
                 onClick={() => archive.mutate(deleting)}
               >
-                Confirm Deletion ({deleting.length})
+                Move To Trash ({deleting.length})
               </Button>
             </div>
           </DialogContent>
@@ -1175,6 +1072,224 @@ function ExecutionDetails({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+type TrashItem = {
+  key: string;
+  kind: "series" | "occurrence";
+  id: string;
+  title: string;
+  owner_id: string | null;
+  label: string;
+  deletedAt: string | null;
+};
+function TrashView({ search, who }: { search: string; who: (id: string | null) => string }) {
+  const qc = useQueryClient();
+  const [selected, setSelected] = useState<string[]>([]);
+  const [confirm, setConfirm] = useState<{ op: "restore" | "purge"; items: TrashItem[] } | null>(
+    null,
+  );
+  const trash = useQuery({
+    queryKey: ["tasks", "trash"],
+    queryFn: async () => {
+      const [tasks, execs] = await Promise.all([
+        supabase.from("tasks").select("*").not("trashed_at", "is", null),
+        supabase
+          .from("task_executions")
+          .select("*")
+          .not("archived_at", "is", null)
+          .is("purged_at", null),
+      ]);
+      if (tasks.error) throw tasks.error;
+      if (execs.error) throw execs.error;
+      const trashedIds = new Set(tasks.data.map((t) => t.id));
+      const items: TrashItem[] = [
+        ...tasks.data.map((t) => ({
+          key: `s:${t.id}`,
+          kind: "series" as const,
+          id: t.id,
+          title: t.title,
+          owner_id: t.owner_id,
+          label:
+            t.recurrence === "once"
+              ? "One-time task"
+              : `Entire series · ${t.recurrence === "daily" ? "Daily" : t.weekdays.map((d) => WEEKDAYS[d]).join(", ")}`,
+          deletedAt: t.trashed_at,
+        })),
+        ...execs.data
+          .filter((e) => !trashedIds.has(e.task_id))
+          .map((e) => ({
+            key: `o:${e.id}`,
+            kind: "occurrence" as const,
+            id: e.id,
+            title: e.title,
+            owner_id: e.owner_id,
+            label: `Occurrence · ${e.scheduled_date ?? "No date"} · ${formatTime12(e.due_time)}`,
+            deletedAt: e.archived_at,
+          })),
+      ];
+      return items.sort((a, b) => (b.deletedAt ?? "").localeCompare(a.deletedAt ?? ""));
+    },
+  });
+  const run = useMutation({
+    mutationFn: async ({ op, items }: { op: "restore" | "purge"; items: TrashItem[] }) => {
+      const series = items.filter((i) => i.kind === "series").map((i) => i.id);
+      const occ = items.filter((i) => i.kind === "occurrence").map((i) => i.id);
+      if (op === "restore") {
+        for (const id of series) {
+          const { error } = await supabase.rpc("restore_task_series", { _task_id: id });
+          if (error) throw error;
+        }
+        if (occ.length) {
+          const { error } = await supabase.rpc("restore_task_executions", {
+            _ids: occ,
+            _confirm_count: occ.length,
+          });
+          if (error) throw error;
+        }
+      } else {
+        if (occ.length) {
+          const { error } = await supabase.rpc("purge_task_executions", {
+            _ids: occ,
+            _confirm_count: occ.length,
+          });
+          if (error) throw error;
+        }
+        if (series.length) {
+          const { error } = await supabase.rpc("purge_tasks", {
+            _ids: series,
+            _confirm_count: series.length,
+          });
+          if (error) throw error;
+        }
+      }
+    },
+    onSuccess: (_, v) => {
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      setSelected([]);
+      setConfirm(null);
+      toast.success(v.op === "restore" ? "Restored" : "Deleted permanently");
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+  const items = (trash.data ?? []).filter((i) =>
+    i.title.toLowerCase().includes(search.toLowerCase()),
+  );
+  const chosen = items.filter((i) => selected.includes(i.key));
+  if (trash.error) return <ErrorNote error={trash.error} retry={() => trash.refetch()} />;
+  if (trash.isLoading) return <Loading />;
+  return (
+    <div className="space-y-4">
+      {items.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="ghost"
+            onClick={() =>
+              setSelected(selected.length === items.length ? [] : items.map((i) => i.key))
+            }
+          >
+            {selected.length > 0 && selected.length === items.length
+              ? "Clear Selection"
+              : `Select All (${items.length})`}
+          </Button>
+          <Button
+            variant="outline"
+            disabled={!chosen.length}
+            onClick={() => setConfirm({ op: "restore", items: chosen })}
+          >
+            <RotateCcw className="h-4 w-4" />
+            Restore Selected ({chosen.length})
+          </Button>
+          <Button
+            variant="outline"
+            disabled={!chosen.length}
+            onClick={() => setConfirm({ op: "purge", items: chosen })}
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete Permanently ({chosen.length})
+          </Button>
+        </div>
+      )}
+      {items.length === 0 ? (
+        <EmptyState title="Trash is empty" />
+      ) : (
+        <div className="grid gap-3 lg:grid-cols-2">
+          {items.map((i) => (
+            <article key={i.key} className="min-w-0 rounded-md border bg-card p-3">
+              <div className="flex items-start gap-3">
+                <Checkbox
+                  aria-label={`Select ${i.title}`}
+                  checked={selected.includes(i.key)}
+                  onCheckedChange={(c) =>
+                    setSelected((s) => (c ? [...s, i.key] : s.filter((k) => k !== i.key)))
+                  }
+                />
+                <div className="min-w-0 flex-1">
+                  <h3 className="break-words font-medium">{i.title}</h3>
+                  <p className="mt-1 text-xs text-gold">{i.label}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {who(i.owner_id)}
+                    {i.deletedAt
+                      ? ` · Deleted ${new Date(i.deletedAt).toLocaleString("en", { timeZone: "America/Bogota" })}`
+                      : ""}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <Button
+                  variant="outline"
+                  className="min-h-11"
+                  onClick={() => setConfirm({ op: "restore", items: [i] })}
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  Restore
+                </Button>
+                <Button
+                  variant="outline"
+                  className="min-h-11"
+                  onClick={() => setConfirm({ op: "purge", items: [i] })}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete Permanently
+                </Button>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+      {confirm && (
+        <Dialog open onOpenChange={(o) => !o && setConfirm(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>
+                {confirm.op === "restore" ? "Restore" : "Permanently delete"} {confirm.items.length}{" "}
+                item{confirm.items.length === 1 ? "" : "s"}?
+              </DialogTitle>
+              <DialogDescription>
+                {confirm.op === "restore"
+                  ? "Occurrences return to their date only. Series return with their schedule and portal visibility."
+                  : "This cannot be undone. Series lose all their executions, history and comments."}{" "}
+                Series: {confirm.items.filter((i) => i.kind === "series").length} · Occurrences:{" "}
+                {confirm.items.filter((i) => i.kind === "occurrence").length}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setConfirm(null)}>
+                Cancel
+              </Button>
+              <Button
+                variant={confirm.op === "purge" ? "destructive" : "default"}
+                disabled={run.isPending}
+                onClick={() => run.mutate(confirm)}
+              >
+                {confirm.op === "restore" ? "Restore" : "Delete Permanently"} (
+                {confirm.items.length})
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
   );
 }
 function eventBody(action: string, body: string) {
