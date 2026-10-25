@@ -239,6 +239,13 @@
       "when": 1792970592354,
       "tag": "0033_task_edit_in_place_early_complete",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1792972551932,
+      "tag": "0034_task_future_complete",
+      "breakpoints": true
     }
   ]
 }

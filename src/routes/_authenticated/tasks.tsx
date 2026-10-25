@@ -423,11 +423,7 @@ function Tasks() {
             <Button
               className="min-h-11"
               variant={t.status === "done" ? "outline" : "default"}
-              disabled={
-                !allowed ||
-                action.isPending ||
-                (!!t.scheduled_date && t.scheduled_date > agencyDate(now))
-              }
+              disabled={!allowed || action.isPending}
               onClick={() =>
                 action.mutate({ task: t, action: t.status === "done" ? "reopen" : "complete" })
               }
@@ -981,7 +977,7 @@ function ExecutionDetails({
         <div className="space-y-5">
           {allowed && !["cancelled", "skipped"].includes(task.status) && (
             <Button
-              disabled={pending || (!!task.scheduled_date && task.scheduled_date > agencyDate())}
+              disabled={pending}
               onClick={() => onAction(task.status === "done" ? "reopen" : "complete")}
             >
               <Check className="h-4 w-4" />

@@ -83,6 +83,7 @@ beforeAll(async () => {
   await db.exec(`create table if not exists public.audit_events(id uuid default gen_random_uuid(),actor_id uuid,entity text,entity_id uuid,action text,details jsonb,created_at timestamptz default now())`);
   await db.exec(readFileSync("drizzle/migrations/0032_task_trash_lifecycle.sql", "utf8").replaceAll("--> statement-breakpoint", ""));
   await db.exec(readFileSync("drizzle/migrations/0033_task_edit_in_place_early_complete.sql", "utf8").replaceAll("--> statement-breakpoint", ""));
+  await db.exec(readFileSync("drizzle/migrations/0034_task_future_complete.sql", "utf8").replaceAll("--> statement-breakpoint", ""));
 }, 30000);
 afterAll(async () => {
   await db.close();
@@ -634,5 +635,32 @@ describe("early completion and editing in place", () => {
     await as(owner, "select task_execution_action($1,'complete')", [id]);
     await edit(tid, { due_date: "", description: "changed" });
     expect((await rows(tid)).rows).toEqual([{ id, status: "done", d: "2030-01-10" }]);
+  });
+});
+
+describe("early completion of a future recurring occurrence", () => {
+  const dated = (tid: string) =>
+    db.query<{ d: string; status: string }>("select scheduled_date::text d,status from task_executions where task_id=$1 and archived_at is null order by 1", [tid]);
+  it("completes only that date, idempotently, and reopens only that date", async () => {
+    const tid = await create({ recurrence: "daily", due_date: "2030-02-01", due_time: "06:35" });
+    await expect(as(other, "select task_future_action($1,'2030-02-03','complete')", [tid])).rejects.toThrow();
+    const a = ((await as(owner, "select task_future_action($1,'2030-02-03','complete') as id", [tid])).rows[0] as { id: string }).id;
+    const b = ((await as(owner, "select task_future_action($1,'2030-02-03','complete') as id", [tid])).rows[0] as { id: string }).id;
+    expect(b).toBe(a);
+    const r = (await dated(tid)).rows.filter((x) => x.d === "2030-02-03");
+    expect(r).toEqual([{ d: "2030-02-03", status: "done" }]);
+    expect((await dated(tid)).rows.filter((x) => x.d !== "2030-02-03" && x.status === "done")).toHaveLength(0);
+    const rule = await db.query<{ recurrence_state: string }>("select recurrence_state from tasks where id=$1", [tid]);
+    expect(rule.rows[0]!.recurrence_state).toBe("enabled");
+    await as(exec, "select task_future_action($1,'2030-02-04','complete')", [tid]);
+    await as(owner, "select task_execution_action($1,'reopen')", [a]);
+    const after = (await dated(tid)).rows;
+    expect(after.find((x) => x.d === "2030-02-03")!.status).toBe("todo");
+    expect(after.find((x) => x.d === "2030-02-04")!.status).toBe("done");
+  });
+  it("a trashed occurrence date cannot be revived by completing it", async () => {
+    const tid = await create({ recurrence: "daily", due_date: "2030-03-01" });
+    await as(owner, "select task_future_action($1,'2030-03-02','archive')", [tid]);
+    await expect(as(owner, "select task_future_action($1,'2030-03-02','complete')", [tid])).rejects.toThrow();
   });
 });
