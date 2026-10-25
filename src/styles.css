@@ -124,3 +124,10 @@
 @utility font-display {
   font-family: var(--font-display);
 }
+
+/* Portal field labels and options retain natural names while matching Title Case. */
+[data-slot="label"],
+[data-slot="select-item"],
+[data-slot="select-value"] {
+  text-transform: capitalize;
+}

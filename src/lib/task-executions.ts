@@ -15,6 +15,9 @@ export type Execution = {
   skip_reason?: string | null;
   completed_at?: string | null;
   projected?: boolean;
+  archived_at?: string | null;
+  visible_to_creator?: boolean;
+  occurrence_date?: string | null;
 };
 export function agencyDate(now = new Date()) {
   return new Intl.DateTimeFormat("en-CA", {

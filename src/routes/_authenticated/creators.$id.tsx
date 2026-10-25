@@ -42,7 +42,22 @@ const STATUSES = ["lead", "onboarding", "active", "paused", "offboarded"] as con
 type Status = (typeof STATUSES)[number];
 
 export const Route = createFileRoute("/_authenticated/creators/$id")({
-  head: () => ({ meta: [{ title: "Creator — VenusX Portal" }] }),
+  head: () => ({
+    meta: [
+      { title: "Creator — VenusX Portal" },
+      {
+        name: "description",
+        content: "Review a VenusX creator profile and authorized workspace details.",
+      },
+      { property: "og:title", content: "Creator — VenusX Portal" },
+      {
+        property: "og:description",
+        content: "Review a VenusX creator profile and authorized workspace details.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
   component: CreatorPage,
 });
 

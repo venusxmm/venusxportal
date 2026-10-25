@@ -4,7 +4,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { EmptyState, ErrorNote, Loading, PageHeader } from "@/components/portal";
 
 export const Route = createFileRoute("/_authenticated/audit")({
-  head: () => ({ meta: [{ title: "Audit Log — VenusX Portal" }] }),
+  head: () => ({
+    meta: [
+      { title: "Audit Log — VenusX Portal" },
+      { name: "description", content: "Review the VenusX agency activity history." },
+      { property: "og:title", content: "Audit Log — VenusX Portal" },
+      { property: "og:description", content: "Review the VenusX agency activity history." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
   component: Audit,
 });
 

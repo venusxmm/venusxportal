@@ -369,12 +369,14 @@ export type Database = {
       }
       task_executions: {
         Row: {
+          archived_at: string | null
           completed_at: string | null
           created_at: string
           creator_id: string | null
           description: string | null
           due_time: string | null
           id: string
+          occurrence_date: string | null
           owner_id: string | null
           priority: Database["public"]["Enums"]["task_priority"]
           recurring: boolean
@@ -385,14 +387,17 @@ export type Database = {
           status: string
           task_id: string
           title: string
+          visible_to_creator: boolean
         }
         Insert: {
+          archived_at?: string | null
           completed_at?: string | null
           created_at?: string
           creator_id?: string | null
           description?: string | null
           due_time?: string | null
           id?: string
+          occurrence_date?: string | null
           owner_id?: string | null
           priority?: Database["public"]["Enums"]["task_priority"]
           recurring?: boolean
@@ -403,14 +408,17 @@ export type Database = {
           status?: string
           task_id: string
           title: string
+          visible_to_creator?: boolean
         }
         Update: {
+          archived_at?: string | null
           completed_at?: string | null
           created_at?: string
           creator_id?: string | null
           description?: string | null
           due_time?: string | null
           id?: string
+          occurrence_date?: string | null
           owner_id?: string | null
           priority?: Database["public"]["Enums"]["task_priority"]
           recurring?: boolean
@@ -421,6 +429,7 @@ export type Database = {
           status?: string
           task_id?: string
           title?: string
+          visible_to_creator?: boolean
         }
         Relationships: [
           {
@@ -454,6 +463,7 @@ export type Database = {
           recurrence: string
           task_id: string
           title: string
+          visible_to_creator: boolean
           weekdays: number[]
         }
         Insert: {
@@ -470,6 +480,7 @@ export type Database = {
           recurrence: string
           task_id: string
           title: string
+          visible_to_creator?: boolean
           weekdays?: number[]
         }
         Update: {
@@ -486,6 +497,7 @@ export type Database = {
           recurrence?: string
           task_id?: string
           title?: string
+          visible_to_creator?: boolean
           weekdays?: number[]
         }
         Relationships: [
@@ -696,7 +708,16 @@ export type Database = {
       }
       _normalize_email_address: { Args: { _email: string }; Returns: string }
       accept_invitation: { Args: { _token_hash: string }; Returns: boolean }
+      archive_task_executions: {
+        Args: {
+          _completed_only?: boolean
+          _confirm_count: number
+          _ids: string[]
+        }
+        Returns: number
+      }
       can_access_creator: { Args: { _creator_id: string }; Returns: boolean }
+      can_read_execution: { Args: { _id: string }; Returns: boolean }
       can_see_task: { Args: { _task_id: string }; Returns: boolean }
       claim_first_executive: { Args: never; Returns: boolean }
       complete_pending_invitation: { Args: never; Returns: boolean }
@@ -745,6 +766,16 @@ export type Database = {
       is_executive: { Args: never; Returns: boolean }
       is_own_creator: { Args: { _creator_id: string }; Returns: boolean }
       materialize_task_executions: { Args: never; Returns: undefined }
+      move_task_execution: {
+        Args: {
+          _date?: string
+          _id: string
+          _occurrence_date: string
+          _task_id: string
+          _time: string
+        }
+        Returns: string
+      }
       post_creator_payout: {
         Args: {
           _amount: number
@@ -782,6 +813,10 @@ export type Database = {
           _date: string
           _task_id: string
         }
+        Returns: string
+      }
+      task_resolve_execution: {
+        Args: { _date: string; _task_id: string }
         Returns: string
       }
     }

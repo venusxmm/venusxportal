@@ -57,7 +57,19 @@ type Transaction = {
 };
 
 export const Route = createFileRoute("/_authenticated/finance")({
-  head: () => ({ meta: [{ title: "Finance — VenusX Portal" }] }),
+  head: () => ({
+    meta: [
+      { title: "Finance — VenusX Portal" },
+      { name: "description", content: "Review VenusX revenue, expenses and creator payouts." },
+      { property: "og:title", content: "Finance — VenusX Portal" },
+      {
+        property: "og:description",
+        content: "Review VenusX revenue, expenses and creator payouts.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
   component: Finance,
 });
 

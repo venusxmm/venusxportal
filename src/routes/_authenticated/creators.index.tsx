@@ -28,7 +28,22 @@ import {
 const STATUSES = ["lead", "onboarding", "active", "paused", "offboarded"] as const;
 
 export const Route = createFileRoute("/_authenticated/creators/")({
-  head: () => ({ meta: [{ title: "Creators — VenusX Portal" }] }),
+  head: () => ({
+    meta: [
+      { title: "Creators — VenusX Portal" },
+      {
+        name: "description",
+        content: "Manage VenusX creator profiles and workspace associations.",
+      },
+      { property: "og:title", content: "Creators — VenusX Portal" },
+      {
+        property: "og:description",
+        content: "Manage VenusX creator profiles and workspace associations.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
   component: Creators,
 });
 
