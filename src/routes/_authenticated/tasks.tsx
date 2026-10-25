@@ -24,7 +24,6 @@ import {
   executionOverdue,
   canExecute,
   formatTime12,
-  ownerCreatorConsistent,
   type Execution,
 } from "@/lib/task-executions";
 import {
@@ -187,12 +186,6 @@ function Tasks() {
       return data;
     },
   });
-  const creatorUsers: Record<string, string | null> = Object.fromEntries(
-    (creators.data ?? []).map((c) => [c.id, c.user_id]),
-  );
-  const creatorOwnerIds = new Set(
-    (creators.data ?? []).flatMap((c) => (c.user_id ? [c.user_id] : [])),
-  );
   const move = useMutation({
     mutationFn: async ({
       task,
@@ -492,7 +485,6 @@ function Tasks() {
   );
   const currentDetails = details
     ? ((agenda.data ?? []).find((t) => t.id === details.id) ??
-      history.data?.find((t) => t.id === details.id) ??
       details)
     : null;
   if (me?.isCreator && !me.isStaff) return <Navigate to="/portal" />;
@@ -1080,6 +1072,224 @@ function ExecutionDetails({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+type TrashItem = {
+  key: string;
+  kind: "series" | "occurrence";
+  id: string;
+  title: string;
+  owner_id: string | null;
+  label: string;
+  deletedAt: string | null;
+};
+function TrashView({ search, who }: { search: string; who: (id: string | null) => string }) {
+  const qc = useQueryClient();
+  const [selected, setSelected] = useState<string[]>([]);
+  const [confirm, setConfirm] = useState<{ op: "restore" | "purge"; items: TrashItem[] } | null>(
+    null,
+  );
+  const trash = useQuery({
+    queryKey: ["tasks", "trash"],
+    queryFn: async () => {
+      const [tasks, execs] = await Promise.all([
+        supabase.from("tasks").select("*").not("trashed_at", "is", null),
+        supabase
+          .from("task_executions")
+          .select("*")
+          .not("archived_at", "is", null)
+          .is("purged_at", null),
+      ]);
+      if (tasks.error) throw tasks.error;
+      if (execs.error) throw execs.error;
+      const trashedIds = new Set(tasks.data.map((t) => t.id));
+      const items: TrashItem[] = [
+        ...tasks.data.map((t) => ({
+          key: `s:${t.id}`,
+          kind: "series" as const,
+          id: t.id,
+          title: t.title,
+          owner_id: t.owner_id,
+          label:
+            t.recurrence === "once"
+              ? "One-time task"
+              : `Entire series · ${t.recurrence === "daily" ? "Daily" : t.weekdays.map((d) => WEEKDAYS[d]).join(", ")}`,
+          deletedAt: t.trashed_at,
+        })),
+        ...execs.data
+          .filter((e) => !trashedIds.has(e.task_id))
+          .map((e) => ({
+            key: `o:${e.id}`,
+            kind: "occurrence" as const,
+            id: e.id,
+            title: e.title,
+            owner_id: e.owner_id,
+            label: `Occurrence · ${e.scheduled_date ?? "No date"} · ${formatTime12(e.due_time)}`,
+            deletedAt: e.archived_at,
+          })),
+      ];
+      return items.sort((a, b) => (b.deletedAt ?? "").localeCompare(a.deletedAt ?? ""));
+    },
+  });
+  const run = useMutation({
+    mutationFn: async ({ op, items }: { op: "restore" | "purge"; items: TrashItem[] }) => {
+      const series = items.filter((i) => i.kind === "series").map((i) => i.id);
+      const occ = items.filter((i) => i.kind === "occurrence").map((i) => i.id);
+      if (op === "restore") {
+        for (const id of series) {
+          const { error } = await supabase.rpc("restore_task_series", { _task_id: id });
+          if (error) throw error;
+        }
+        if (occ.length) {
+          const { error } = await supabase.rpc("restore_task_executions", {
+            _ids: occ,
+            _confirm_count: occ.length,
+          });
+          if (error) throw error;
+        }
+      } else {
+        if (occ.length) {
+          const { error } = await supabase.rpc("purge_task_executions", {
+            _ids: occ,
+            _confirm_count: occ.length,
+          });
+          if (error) throw error;
+        }
+        if (series.length) {
+          const { error } = await supabase.rpc("purge_tasks", {
+            _ids: series,
+            _confirm_count: series.length,
+          });
+          if (error) throw error;
+        }
+      }
+    },
+    onSuccess: (_, v) => {
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      setSelected([]);
+      setConfirm(null);
+      toast.success(v.op === "restore" ? "Restored" : "Deleted permanently");
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+  const items = (trash.data ?? []).filter((i) =>
+    i.title.toLowerCase().includes(search.toLowerCase()),
+  );
+  const chosen = items.filter((i) => selected.includes(i.key));
+  if (trash.error) return <ErrorNote error={trash.error} retry={() => trash.refetch()} />;
+  if (trash.isLoading) return <Loading />;
+  return (
+    <div className="space-y-4">
+      {items.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="ghost"
+            onClick={() =>
+              setSelected(selected.length === items.length ? [] : items.map((i) => i.key))
+            }
+          >
+            {selected.length > 0 && selected.length === items.length
+              ? "Clear Selection"
+              : `Select All (${items.length})`}
+          </Button>
+          <Button
+            variant="outline"
+            disabled={!chosen.length}
+            onClick={() => setConfirm({ op: "restore", items: chosen })}
+          >
+            <RotateCcw className="h-4 w-4" />
+            Restore Selected ({chosen.length})
+          </Button>
+          <Button
+            variant="outline"
+            disabled={!chosen.length}
+            onClick={() => setConfirm({ op: "purge", items: chosen })}
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete Permanently ({chosen.length})
+          </Button>
+        </div>
+      )}
+      {items.length === 0 ? (
+        <EmptyState title="Trash is empty" />
+      ) : (
+        <div className="grid gap-3 lg:grid-cols-2">
+          {items.map((i) => (
+            <article key={i.key} className="min-w-0 rounded-md border bg-card p-3">
+              <div className="flex items-start gap-3">
+                <Checkbox
+                  aria-label={`Select ${i.title}`}
+                  checked={selected.includes(i.key)}
+                  onCheckedChange={(c) =>
+                    setSelected((s) => (c ? [...s, i.key] : s.filter((k) => k !== i.key)))
+                  }
+                />
+                <div className="min-w-0 flex-1">
+                  <h3 className="break-words font-medium">{i.title}</h3>
+                  <p className="mt-1 text-xs text-gold">{i.label}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {who(i.owner_id)}
+                    {i.deletedAt
+                      ? ` · Deleted ${new Date(i.deletedAt).toLocaleString("en", { timeZone: "America/Bogota" })}`
+                      : ""}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <Button
+                  variant="outline"
+                  className="min-h-11"
+                  onClick={() => setConfirm({ op: "restore", items: [i] })}
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  Restore
+                </Button>
+                <Button
+                  variant="outline"
+                  className="min-h-11"
+                  onClick={() => setConfirm({ op: "purge", items: [i] })}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete Permanently
+                </Button>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+      {confirm && (
+        <Dialog open onOpenChange={(o) => !o && setConfirm(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>
+                {confirm.op === "restore" ? "Restore" : "Permanently delete"} {confirm.items.length}{" "}
+                item{confirm.items.length === 1 ? "" : "s"}?
+              </DialogTitle>
+              <DialogDescription>
+                {confirm.op === "restore"
+                  ? "Occurrences return to their date only. Series return with their schedule and portal visibility."
+                  : "This cannot be undone. Series lose all their executions, history and comments."}{" "}
+                Series: {confirm.items.filter((i) => i.kind === "series").length} · Occurrences:{" "}
+                {confirm.items.filter((i) => i.kind === "occurrence").length}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setConfirm(null)}>
+                Cancel
+              </Button>
+              <Button
+                variant={confirm.op === "purge" ? "destructive" : "default"}
+                disabled={run.isPending}
+                onClick={() => run.mutate(confirm)}
+              >
+                {confirm.op === "restore" ? "Restore" : "Delete Permanently"} (
+                {confirm.items.length})
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
   );
 }
 function eventBody(action: string, body: string) {
