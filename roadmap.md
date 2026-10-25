@@ -1,9 +1,9 @@
 # V1 stabilization
 
 ## Tasks overhaul
-- [ ] Implement owner-only permissions and immutable dated recurrence executions.
-- [ ] Replace Tasks presentation with mobile-first daily agenda, details, executive management and skip review.
-- [ ] Run focused permission/schedule/history tests and authenticated desktop/mobile checks; no deployment.
+- [x] Implement owner-only permissions and immutable dated recurrence executions.
+- [x] Replace Tasks presentation with mobile-first daily agenda, details, executive management and skip review.
+- [x] Run focused permission/schedule/history tests and authenticated executive desktop/mobile checks; real isolated QA completion/reopen/comment readback verified, no deployment. Other-role browser sessions were not exercised; their boundaries were tested in isolated SQL.
 
 ## Current targeted connection repair
 - [x] Trace invitation middleware environment failure and restore the existing runtime binding (managed key was stale; canonical bindings refreshed).
