@@ -96,7 +96,7 @@ export function Pill({ value, label }: { value: string; label?: string | undefin
   return (
     <Badge
       variant="outline"
-      className={cn("text-[10px] font-medium uppercase tracking-wider", tone[value])}
+      className={cn("text-[11px] font-medium", tone[value])}
     >
       {label ?? value.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase())}
     </Badge>
