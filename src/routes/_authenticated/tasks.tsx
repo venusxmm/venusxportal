@@ -141,12 +141,6 @@ function Tasks() {
       }))
     : BOARD_BLOCKS;
   const [editingBlocks, setEditingBlocks] = useState(false);
-  const creatorUsers: Record<string, string | null> = Object.fromEntries(
-    (creators.data ?? []).map((c) => [c.id, c.user_id]),
-  );
-  const creatorOwnerIds = new Set(
-    (creators.data ?? []).flatMap((c) => (c.user_id ? [c.user_id] : [])),
-  );
   const configurations = useQuery({
     queryKey: ["tasks", "configurations"],
     enabled: !!me?.isExec,
@@ -219,6 +213,12 @@ function Tasks() {
       return data;
     },
   });
+  const creatorUsers: Record<string, string | null> = Object.fromEntries(
+    (creators.data ?? []).map((c) => [c.id, c.user_id]),
+  );
+  const creatorOwnerIds = new Set(
+    (creators.data ?? []).flatMap((c) => (c.user_id ? [c.user_id] : [])),
+  );
   const move = useMutation({
     mutationFn: async ({
       task,
