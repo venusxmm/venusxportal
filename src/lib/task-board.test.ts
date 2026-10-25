@@ -55,3 +55,18 @@ describe("time block movement", () => {
     expect(canMoveExecution({ ...task, projected: true }, true)).toBe(true);
   });
 });
+import { validateBlocks } from "./task-board";
+describe("configurable blocks", () => {
+  const night = { id: "n", label: "Night", start: "00:00", end: "04:00" };
+  it("03:30 lands in Night", () => expect(blockForTime("03:30", [night])?.id).toBe("n"));
+  it("wraps across midnight", () => {
+    const late = { id: "l", label: "Late", start: "22:00", end: "02:00" };
+    expect(blockForTime("01:00", [late])?.id).toBe("l");
+    expect(blockForTime("23:00", [late])?.id).toBe("l");
+    expect(blockForTime("03:00", [late])).toBeUndefined();
+  });
+  it("rejects overlaps and accepts defaults", () => {
+    expect(validateBlocks(BOARD_BLOCKS)).toBeNull();
+    expect(validateBlocks([night, { id: "x", label: "X", start: "03:00", end: "05:00" }])).toMatch(/overlaps/);
+  });
+});

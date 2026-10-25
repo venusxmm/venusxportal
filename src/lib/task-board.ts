@@ -18,16 +18,11 @@ function inBlock(b: BoardBlock, time: string) {
   if (e === 0 || e === 1440) e = 1440;
   return s < e ? t >= s && t < e : t >= s || t < e;
 }
-function blockMinutes(b: BoardBlock) {
+function blockMinutes(b: BoardBlock, step = 5) {
   const s = mins(b.start);
-  let e = mins(b.end);
-  if (e === 0) e = 1440;
+  const len = (((mins(b.end) - s) % 1440) + 1440) % 1440 || 1440;
   const out: number[] = [];
-  for (let m = s; m !== e % 1440 || (out.length === 0 && s === e % 1440 ? false : false); m = (m + 5) % 1440) {
-    out.push(m);
-    if (out.length > 288) break;
-    if ((m + 5) % 1440 === e % 1440) break;
-  }
+  for (let k = 0; k < len; k += step) out.push((s + k) % 1440);
   return out;
 }
 /** Rejects empty, duplicate-name, zero-length and overlapping blocks. Returns an error or null. */
@@ -40,10 +35,8 @@ export function validateBlocks(blocks: BoardBlock[]) {
     if (names.has(name)) return `Duplicate block name: ${b.label}`;
     names.add(name);
     if (!/^\d{2}:\d{2}$/.test(b.start) || !/^\d{2}:\d{2}$/.test(b.end)) return "Use HH:MM times";
-    if (b.start === b.end || (b.start === "00:00" && b.end === "24:00")) {
-      if (b.start === b.end) return `${b.label} has no length`;
-    }
-    for (const m of blockMinutes(b)) {
+    if (b.start === b.end) return `${b.label} has no length`;
+    for (const m of blockMinutes(b, 1)) {
       if (used.has(m)) return `${b.label} overlaps another block`;
       used.add(m);
     }
