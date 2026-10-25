@@ -136,14 +136,19 @@ function Tasks() {
       action: string;
       body?: string | undefined;
     }) => {
-      const { error } = task.projected && task.scheduled_date ? await supabase.rpc("task_future_action", {
-        _task_id: task.task_id, _date: task.scheduled_date, _action: action,
-        ...(body === undefined ? {} : { _body: body }),
-      }) : await supabase.rpc("task_execution_action", {
-        _id: task.id,
-        _action: action,
-        ... (body === undefined ? {} : { _body: body }),
-      });
+      const { error } =
+        task.projected && task.scheduled_date
+          ? await supabase.rpc("task_future_action", {
+              _task_id: task.task_id,
+              _date: task.scheduled_date,
+              _action: action,
+              ...(body === undefined ? {} : { _body: body }),
+            })
+          : await supabase.rpc("task_execution_action", {
+              _id: task.id,
+              _action: action,
+              ...(body === undefined ? {} : { _body: body }),
+            });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -337,61 +342,70 @@ function Tasks() {
           )}
         </TabsList>
       </Tabs>
-      <details className="group border-b pb-3" open={search !== "" || priority !== "all" || owner !== "all" || creator !== "all" || status !== "all"}>
-      <summary className="cursor-pointer text-sm font-medium">Filters</summary>
-      <div className="mt-3 grid min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-5">
-        <Input
-          aria-label="Search tasks"
-          placeholder="Search tasks"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="h-11"
-        />
-        <Filter
-          label="Priority"
-          value={priority}
-          onChange={setPriority}
-          options={[
-            { value: "all", label: "All priorities" },
-            ...["low", "medium", "high", "critical"].map((value) => ({ value, label: value })),
-          ]}
-        />
-        <Filter
-          label="Status"
-          value={status}
-          onChange={setStatus}
-          options={[
-            { value: "all", label: "All statuses" },
-            { value: "open", label: "Open" },
-            ...["done", "skipped", "cancelled"].map((value) => ({ value, label: value })),
-          ]}
-        />
-        {me?.isExec && (
-          <>
-            <Filter
-              label="Owner"
-              value={owner}
-              onChange={setOwner}
-              options={[
-                { value: "all", label: "All owners" },
-                ...(people.data ?? []).map((p) => ({
-                  value: p.id,
-                  label: p.full_name || p.email || "Member",
-                })),
-              ]}
-            />
-            <Filter
-              label="Creator"
-              value={creator}
-              onChange={setCreator}
-              options={[
-                { value: "all", label: "All creators" },
-                ...(creators.data ?? []).map((c) => ({ value: c.id, label: c.stage_name })),
-              ]}
-            />
-          </>
-        )}
-      </div>
+      <details
+        className="group border-b pb-3"
+        open={
+          search !== "" ||
+          priority !== "all" ||
+          owner !== "all" ||
+          creator !== "all" ||
+          status !== "all"
+        }
+      >
+        <summary className="cursor-pointer text-sm font-medium">Filters</summary>
+        <div className="mt-3 grid min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+          <Input
+            aria-label="Search tasks"
+            placeholder="Search tasks"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-11"
+          />
+          <Filter
+            label="Priority"
+            value={priority}
+            onChange={setPriority}
+            options={[
+              { value: "all", label: "All priorities" },
+              ...["low", "medium", "high", "critical"].map((value) => ({ value, label: value })),
+            ]}
+          />
+          <Filter
+            label="Status"
+            value={status}
+            onChange={setStatus}
+            options={[
+              { value: "all", label: "All statuses" },
+              { value: "open", label: "Open" },
+              ...["done", "skipped", "cancelled"].map((value) => ({ value, label: value })),
+            ]}
+          />
+          {me?.isExec && (
+            <>
+              <Filter
+                label="Owner"
+                value={owner}
+                onChange={setOwner}
+                options={[
+                  { value: "all", label: "All owners" },
+                  ...(people.data ?? []).map((p) => ({
+                    value: p.id,
+                    label: p.full_name || p.email || "Member",
+                  })),
+                ]}
+              />
+              <Filter
+                label="Creator"
+                value={creator}
+                onChange={setCreator}
+                options={[
+                  { value: "all", label: "All creators" },
+                  ...(creators.data ?? []).map((c) => ({ value: c.id, label: c.stage_name })),
+                ]}
+              />
+            </>
+          )}
+        </div>
       </details>
       {agenda.error ? (
         <ErrorNote error={agenda.error} retry={() => agenda.refetch()} />
@@ -492,7 +506,11 @@ function Tasks() {
         <ExecutionDetails
           task={currentDetails}
           executive={!!me?.isExec}
-          allowed={!!me && currentDetails.status !== "cancelled" && (me.isExec || currentDetails.owner_id === me.id)}
+          allowed={
+            !!me &&
+            currentDetails.status !== "cancelled" &&
+            (me.isExec || currentDetails.owner_id === me.id)
+          }
           pending={action.isPending}
           onClose={() => setDetails(null)}
           onAction={(act, body) => action.mutate({ task: currentDetails, action: act, body })}
