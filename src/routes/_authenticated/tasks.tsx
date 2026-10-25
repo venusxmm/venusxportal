@@ -1197,10 +1197,11 @@ function ConfigurationDialog({
 }: {
   task: Task | null;
   people: { id: string; full_name: string | null; email: string | null; roles: string[] }[];
-  creators: { id: string; stage_name: string }[];
+  creators: { id: string; stage_name: string; user_id: string | null }[];
   onClose: () => void;
 }) {
   const qc = useQueryClient();
+  const [applyToday, setApplyToday] = useState(true);
   const [memberType, setMemberType] = useState("all");
   const [f, setF] = useState({
     title: task?.title ?? "",
@@ -1219,7 +1220,7 @@ function ConfigurationDialog({
     mutationFn: async () => {
       const { error } = await supabase.rpc("save_task_configuration", {
         _task_id: task?.id ?? "00000000-0000-0000-0000-000000000000",
-        _config: f,
+        _config: { ...f, apply_today: !!task && applyToday },
       });
       if (error) throw error;
     },
@@ -1232,6 +1233,17 @@ function ConfigurationDialog({
   });
   const field = (name: "title" | "description" | "due_date" | "due_time", value: string) =>
     setF((current) => ({ ...current, [name]: value }));
+  const ownerCreator = creators.find((c) => !!c.user_id && c.user_id === f.owner_id);
+  const canPublish = !!ownerCreator && f.creator_id === ownerCreator.id;
+  const setOwner = (id: string) => {
+    const linked = creators.find((c) => !!c.user_id && c.user_id === id);
+    setF((cur) => ({
+      ...cur,
+      owner_id: id,
+      creator_id: linked ? linked.id : cur.creator_id,
+      visible_to_creator: linked ? cur.visible_to_creator : false,
+    }));
+  };
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[90dvh] overflow-y-auto">
@@ -1283,7 +1295,7 @@ function ConfigurationDialog({
               <Filter
                 label="Task Owner"
                 value={f.owner_id || "none"}
-                onChange={(v) => setF({ ...f, owner_id: v === "none" ? "" : v })}
+                onChange={(v) => setOwner(v === "none" ? "" : v)}
                 options={[
                   { value: "none", label: "Unassigned" },
                   ...people
@@ -1391,6 +1403,7 @@ function ConfigurationDialog({
             <Filter
               label="Linked Creator"
               value={f.creator_id || "none"}
+              disabled={!!ownerCreator}
               onChange={(v) =>
                 setF({
                   ...f,
@@ -1407,12 +1420,33 @@ function ConfigurationDialog({
           <div className="flex min-h-11 items-center gap-3">
             <Checkbox
               id="creator-visible"
-              disabled={!f.creator_id}
+              disabled={!canPublish && !f.visible_to_creator}
               checked={f.visible_to_creator}
               onCheckedChange={(checked) => setF({ ...f, visible_to_creator: checked === true })}
             />
             <Label htmlFor="creator-visible">Visible In Creator's Portal</Label>
           </div>
+          <p className="text-xs text-muted-foreground">
+            {ownerCreator
+              ? "The owner is a creator, so Linked Creator follows the owner. Publishing stays a separate choice."
+              : "Only tasks owned by a creator can appear in that creator's portal. Linked Creator is just a reference here."}
+          </p>
+          {f.visible_to_creator && !canPublish && (
+            <p className="text-sm text-warning">
+              This task is published but its owner isn't the linked creator. Set the owner to the
+              creator or turn off portal visibility before saving.
+            </p>
+          )}
+          {task && f.recurrence_state === "enabled" && (
+            <div className="flex min-h-11 items-center gap-3">
+              <Checkbox
+                id="apply-today"
+                checked={applyToday}
+                onCheckedChange={(checked) => setApplyToday(checked === true)}
+              />
+              <Label htmlFor="apply-today">Also Update Today's Pending Execution</Label>
+            </div>
+          )}
           {save.error && <ErrorNote error={save.error} />}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={onClose}>
