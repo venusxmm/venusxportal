@@ -38,7 +38,7 @@ export function executionOverdue(task: Execution, now = new Date()) {
     return false;
   return (
     new Date(
-      `${task.scheduled_date}T${task.due_time.slice(0, 8).padEnd(8, ":00")}-05:00`,
+      `${task.scheduled_date}T${task.due_time.length === 5 ? `${task.due_time}:00` : task.due_time.slice(0, 8)}-05:00`,
     ).getTime() < now.getTime()
   );
 }

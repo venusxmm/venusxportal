@@ -134,12 +134,12 @@ function Tasks() {
     }: {
       task: Execution;
       action: string;
-      body?: string;
+      body?: string | undefined;
     }) => {
       const { error } = await supabase.rpc("task_execution_action", {
         _id: task.id,
         _action: action,
-        _body: body ?? null,
+        ... (body === undefined ? {} : { _body: body }),
       });
       if (error) throw error;
     },
@@ -696,7 +696,7 @@ function ConfigurationDialog({
   const save = useMutation({
     mutationFn: async () => {
       const { error } = await supabase.rpc("save_task_configuration", {
-        _task_id: task?.id ?? null,
+        _task_id: task?.id ?? "00000000-0000-0000-0000-000000000000",
         _config: f,
       });
       if (error) throw error;
