@@ -57,3 +57,13 @@ export function appliesOn(mode: string, weekdays: number[], start: string, date:
     ? date === start
     : mode === "daily" || weekdays.includes(new Date(`${date}T12:00:00Z`).getUTCDay());
 }
+/** Creator portal order: date ascending (undated last), timed before untimed within a date. */
+export function sortPortalTasks<T extends { scheduled_date?: string | null; due_time: string | null }>(
+  rows: T[],
+): T[] {
+  return [...rows].sort(
+    (a, b) =>
+      (a.scheduled_date ?? "9999-12-31").localeCompare(b.scheduled_date ?? "9999-12-31") ||
+      (a.due_time?.slice(0, 5) ?? "99:99").localeCompare(b.due_time?.slice(0, 5) ?? "99:99"),
+  );
+}

@@ -54,3 +54,15 @@ describe("Bogota dated execution rules", () => {
   it("navigates dates without device timezone drift", () =>
     expect(shiftDate("2026-10-31", 1)).toBe("2026-11-01"));
 });
+
+import { sortPortalTasks as sortPortal } from "./task-executions";
+describe("creator portal ordering", () => {
+  it("sorts by date then time, untimed after timed on the same date", () => {
+    const r = sortPortal([
+      { id: "c", scheduled_date: "2026-10-26", due_time: "08:00" },
+      { id: "b", scheduled_date: "2026-10-25", due_time: null },
+      { id: "a", scheduled_date: "2026-10-25", due_time: "14:30:00" },
+    ]);
+    expect(r.map((x) => x.id)).toEqual(["a", "b", "c"]);
+  });
+});

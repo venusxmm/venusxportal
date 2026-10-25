@@ -4,9 +4,14 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useMe } from "@/lib/me";
 import { money, summarize } from "@/lib/finance";
-import { EmptyState, Loading, PageHeader, Pill, Stat } from "@/components/portal";
+import { EmptyState, Loading, PageHeader, Stat } from "@/components/portal";
 import { Button } from "@/components/ui/button";
-import { agencyDate, executionOverdue, type Execution } from "@/lib/task-executions";
+import {
+  agencyDate,
+  executionOverdue,
+  sortPortalTasks,
+  type Execution,
+} from "@/lib/task-executions";
 import { Progress } from "@/components/ui/progress";
 
 export const Route = createFileRoute("/_authenticated/portal")({
@@ -99,11 +104,46 @@ function Portal() {
         body="If you accepted a Creator invitation, confirm that your email is verified and matches one active Creator profile. Otherwise, ask an Executive to verify the Creator email and invitation. Access is not granted until the association is confirmed."
       />
     );
-  const ts = tasks.data ?? [];
-  const pct = ts.length
-    ? Math.round((ts.filter((t) => t.status === "done").length / ts.length) * 100)
-    : 0;
+  const ts = sortPortalTasks(
+    (tasks.data ?? []).filter((t) => t.visible_to_creator && t.owner_id === me.id),
+  );
+  const pending = ts.filter((t) => t.status !== "done");
+  const completed = ts.filter((t) => t.status === "done");
+  const pct = ts.length ? Math.round((completed.length / ts.length) * 100) : 0;
   const s = summarize(fin.data ?? []);
+  const card = (t: Execution) => {
+    const late = executionOverdue(t);
+    return (
+      <div key={t.id} className="flex items-start gap-3 rounded-lg border bg-card p-4">
+        <div className="min-w-0 flex-1">
+          <p className={t.status === "done" ? "text-muted-foreground line-through" : ""}>
+            {t.title}
+          </p>
+          <p className={"mt-1 text-xs " + (late ? "text-destructive" : "text-muted-foreground")}>
+            {t.scheduled_date ?? "No date"} · {t.due_time?.slice(0, 5) ?? "No time"}
+            {late ? " · Overdue" : ""}
+          </p>
+          {t.description && (
+            <details className="mt-1">
+              <summary className="cursor-pointer text-xs text-gold">View details</summary>
+              <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
+                {t.description}
+              </p>
+            </details>
+          )}
+        </div>
+        <Button
+          size="sm"
+          className="min-h-11"
+          variant={t.status === "done" ? "outline" : "default"}
+          disabled={complete.isPending}
+          onClick={() => complete.mutate({ id: t.id, done: t.status !== "done" })}
+        >
+          {t.status === "done" ? "Undo" : "Done"}
+        </Button>
+      </div>
+    );
+  };
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -129,37 +169,18 @@ function Portal() {
       </h2>
       {tasks.isLoading ? (
         <Loading />
-      ) : ts.length === 0 ? (
+      ) : pending.length === 0 ? (
         <EmptyState title="You're all caught up" />
       ) : (
-        <div className="space-y-2">
-          {ts.map((t) => (
-            <div key={t.id} className="flex items-center gap-3 rounded-lg border bg-card p-4">
-              <div className="flex-1">
-                <p className={t.status === "done" ? "text-muted-foreground line-through" : ""}>
-                  {t.title}
-                </p>
-                {t.description && <p className="text-xs text-muted-foreground">{t.description}</p>}
-                <p
-                  className={
-                    "mt-1 text-xs " +
-                    (executionOverdue(t) ? "text-destructive" : "text-muted-foreground")
-                  }
-                >
-                  {t.scheduled_date ? `Due ${t.scheduled_date}` : ""}
-                </p>
-              </div>
-              <Pill value={t.status} label={t.status.replaceAll("_", " ")} />
-              <Button
-                size="sm"
-                variant={t.status === "done" ? "outline" : "default"}
-                onClick={() => complete.mutate({ id: t.id, done: t.status !== "done" })}
-              >
-                {t.status === "done" ? "Undo" : "Done"}
-              </Button>
-            </div>
-          ))}
-        </div>
+        <div className="space-y-2">{pending.map(card)}</div>
+      )}
+      {completed.length > 0 && (
+        <details className="mt-4">
+          <summary className="cursor-pointer text-sm text-muted-foreground">
+            Completed ({completed.length})
+          </summary>
+          <div className="mt-2 space-y-2">{completed.map(card)}</div>
+        </details>
       )}
 
       <h2 className="mb-3 mt-8 text-sm uppercase tracking-widest text-muted-foreground">
