@@ -332,6 +332,172 @@ export type Database = {
           },
         ]
       }
+      task_execution_events: {
+        Row: {
+          action: string
+          actor_id: string | null
+          body: string | null
+          created_at: string
+          execution_id: string
+          id: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          body?: string | null
+          created_at?: string
+          execution_id: string
+          id?: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          body?: string | null
+          created_at?: string
+          execution_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_execution_events_execution_id_fkey"
+            columns: ["execution_id"]
+            isOneToOne: false
+            referencedRelation: "task_executions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      task_executions: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          creator_id: string | null
+          description: string | null
+          due_time: string | null
+          id: string
+          owner_id: string | null
+          priority: Database["public"]["Enums"]["task_priority"]
+          recurring: boolean
+          revision_id: string | null
+          scheduled_date: string | null
+          skip_reason: string | null
+          skip_state: string
+          status: string
+          task_id: string
+          title: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          creator_id?: string | null
+          description?: string | null
+          due_time?: string | null
+          id?: string
+          owner_id?: string | null
+          priority?: Database["public"]["Enums"]["task_priority"]
+          recurring?: boolean
+          revision_id?: string | null
+          scheduled_date?: string | null
+          skip_reason?: string | null
+          skip_state?: string
+          status?: string
+          task_id: string
+          title: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          creator_id?: string | null
+          description?: string | null
+          due_time?: string | null
+          id?: string
+          owner_id?: string | null
+          priority?: Database["public"]["Enums"]["task_priority"]
+          recurring?: boolean
+          revision_id?: string | null
+          scheduled_date?: string | null
+          skip_reason?: string | null
+          skip_state?: string
+          status?: string
+          task_id?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_executions_revision_id_fkey"
+            columns: ["revision_id"]
+            isOneToOne: false
+            referencedRelation: "task_revisions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_executions_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      task_revisions: {
+        Row: {
+          created_at: string
+          creator_id: string | null
+          description: string | null
+          due_time: string | null
+          effective_from: string
+          effective_until: string | null
+          enabled: boolean
+          id: string
+          owner_id: string | null
+          priority: Database["public"]["Enums"]["task_priority"]
+          recurrence: string
+          task_id: string
+          title: string
+          weekdays: number[]
+        }
+        Insert: {
+          created_at?: string
+          creator_id?: string | null
+          description?: string | null
+          due_time?: string | null
+          effective_from: string
+          effective_until?: string | null
+          enabled?: boolean
+          id?: string
+          owner_id?: string | null
+          priority: Database["public"]["Enums"]["task_priority"]
+          recurrence: string
+          task_id: string
+          title: string
+          weekdays?: number[]
+        }
+        Update: {
+          created_at?: string
+          creator_id?: string | null
+          description?: string | null
+          due_time?: string | null
+          effective_from?: string
+          effective_until?: string | null
+          enabled?: boolean
+          id?: string
+          owner_id?: string | null
+          priority?: Database["public"]["Enums"]["task_priority"]
+          recurrence?: string
+          task_id?: string
+          title?: string
+          weekdays?: number[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_revisions_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tasks: {
         Row: {
           archived_at: string | null
@@ -347,11 +513,14 @@ export type Database = {
           member_type: string | null
           owner_id: string | null
           priority: Database["public"]["Enums"]["task_priority"]
+          recurrence: string
+          recurrence_state: string
           source: string
           status: Database["public"]["Enums"]["task_status"]
           title: string
           updated_at: string
           visible_to_creator: boolean
+          weekdays: number[]
         }
         Insert: {
           archived_at?: string | null
@@ -367,11 +536,14 @@ export type Database = {
           member_type?: string | null
           owner_id?: string | null
           priority?: Database["public"]["Enums"]["task_priority"]
+          recurrence?: string
+          recurrence_state?: string
           source?: string
           status?: Database["public"]["Enums"]["task_status"]
           title: string
           updated_at?: string
           visible_to_creator?: boolean
+          weekdays?: number[]
         }
         Update: {
           archived_at?: string | null
@@ -387,11 +559,14 @@ export type Database = {
           member_type?: string | null
           owner_id?: string | null
           priority?: Database["public"]["Enums"]["task_priority"]
+          recurrence?: string
+          recurrence_state?: string
           source?: string
           status?: Database["public"]["Enums"]["task_status"]
           title?: string
           updated_at?: string
           visible_to_creator?: boolean
+          weekdays?: number[]
         }
         Relationships: [
           {
@@ -569,6 +744,7 @@ export type Database = {
       is_active_member: { Args: { _user_id: string }; Returns: boolean }
       is_executive: { Args: never; Returns: boolean }
       is_own_creator: { Args: { _creator_id: string }; Returns: boolean }
+      materialize_task_executions: { Args: never; Returns: undefined }
       post_creator_payout: {
         Args: {
           _amount: number
@@ -589,6 +765,24 @@ export type Database = {
       revoke_team_member_access: {
         Args: { _user_id: string }
         Returns: boolean
+      }
+      save_task_configuration: {
+        Args: { _config: Json; _task_id: string }
+        Returns: string
+      }
+      task_agenda: { Args: { _date: string }; Returns: Json }
+      task_execution_action: {
+        Args: { _action: string; _body?: string; _id: string }
+        Returns: undefined
+      }
+      task_future_action: {
+        Args: {
+          _action: string
+          _body?: string
+          _date: string
+          _task_id: string
+        }
+        Returns: string
       }
     }
     Enums: {

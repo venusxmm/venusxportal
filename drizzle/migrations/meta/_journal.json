@@ -169,6 +169,27 @@
       "when": 1792886590552,
       "tag": "0023_invitation_delivery_and_explicit_regrant",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1792956824436,
+      "tag": "0024_task_executions_owner_security",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1792957069715,
+      "tag": "0025_task_execution_configuration_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1792957198003,
+      "tag": "0026_task_future_revision_editing",
+      "breakpoints": true
     }
   ]
 }

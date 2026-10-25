@@ -38,7 +38,7 @@ const NAV: NavItem[] = [
   { to: "/dashboard", label: "Overview", show: () => true },
   { to: "/portal", label: "My Portal", show: (m) => m.isCreator },
   { to: "/creators", label: "Creators", show: (m) => m.isStaff },
-  { to: "/tasks", label: "Tasks", show: (m) => m.isStaff },
+  { to: "/tasks", label: "Tasks", show: () => true },
   { to: "/finance", label: "Finance", show: (m) => m.isExec },
   { to: "/team", label: "Team & Access", show: (m) => m.isExec },
   { to: "/audit", label: "Audit Log", show: (m) => m.isExec },
@@ -74,7 +74,7 @@ function Shell() {
   const items = NAV.filter((n) => n.show(me));
 
   const nav = (
-    <nav className="flex flex-col gap-1">
+    <nav className="flex flex-col gap-1 uppercase">
       {items.map((n) =>
         n.soon ? (
           <span
