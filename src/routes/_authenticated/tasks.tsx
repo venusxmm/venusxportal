@@ -1,7 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { Check, ChevronLeft, ChevronRight, Plus, RotateCcw, Repeat2, Clock, GripVertical, ArrowRightLeft, Trash2 } from "lucide-react";
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  RotateCcw,
+  Repeat2,
+  Clock,
+  GripVertical,
+  ArrowRightLeft,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
@@ -13,7 +24,14 @@ import {
   canExecute,
   type Execution,
 } from "@/lib/task-executions";
-import { BOARD_BLOCKS, blockForTime, currentBlock, timeInBlock, canMoveExecution, titleCase } from "@/lib/task-board";
+import {
+  BOARD_BLOCKS,
+  blockForTime,
+  currentBlock,
+  timeInBlock,
+  canMoveExecution,
+  titleCase,
+} from "@/lib/task-board";
 import { Checkbox } from "@/components/ui/checkbox";
 import { EmptyState, ErrorNote, Loading, PageHeader, Pill } from "@/components/portal";
 import { Button } from "@/components/ui/button";
@@ -134,7 +152,15 @@ function Tasks() {
     },
   });
   const move = useMutation({
-    mutationFn: async ({ task, time, targetDate }: { task: Execution; time: string; targetDate?: string }) => {
+    mutationFn: async ({
+      task,
+      time,
+      targetDate,
+    }: {
+      task: Execution;
+      time: string;
+      targetDate?: string;
+    }) => {
       const { error } = await supabase.rpc("move_task_execution", {
         _id: task.projected ? undefined : task.id,
         _task_id: task.task_id,
@@ -147,7 +173,9 @@ function Tasks() {
     onSuccess: (_, variables) => {
       qc.invalidateQueries({ queryKey: ["tasks"] });
       qc.invalidateQueries({ queryKey: ["execution-events"] });
-      toast.success(`Scheduled ${variables.targetDate ?? variables.task.scheduled_date} at ${variables.time}`);
+      toast.success(
+        `Scheduled ${variables.targetDate ?? variables.task.scheduled_date} at ${variables.time}`,
+      );
       setMoving(null);
     },
     onError: (error) => toast.error(error.message),
@@ -155,7 +183,8 @@ function Tasks() {
   const archive = useMutation({
     mutationFn: async (tasks: Execution[]) => {
       const { error } = await supabase.rpc("archive_task_executions", {
-        _ids: tasks.map(t => t.id), _confirm_count: tasks.length,
+        _ids: tasks.map((t) => t.id),
+        _confirm_count: tasks.length,
         _completed_only: tasks.length > 1,
       });
       if (error) throw error;
@@ -163,19 +192,22 @@ function Tasks() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tasks"] });
       qc.invalidateQueries({ queryKey: ["execution-events"] });
-      setDeleting([]); setSelected([]); setDetails(null);
+      setDeleting([]);
+      setSelected([]);
+      setDetails(null);
       toast.success("Executions archived; history preserved");
     },
     onError: (error) => toast.error(error.message),
   });
   const dropTask = (blockId: string) => {
-    const block = BOARD_BLOCKS.find(b => b.id === blockId);
+    const block = BOARD_BLOCKS.find((b) => b.id === blockId);
     if (dragging && block && canMoveExecution(dragging, !!me?.isExec)) {
       const time = timeInBlock(block, dragging, agenda.data ?? []);
-      if (time) move.mutate({task: dragging, time});
+      if (time) move.mutate({ task: dragging, time });
       else toast.error("This block is full. Choose an exact time.");
     }
-    setDragging(null); setDropBlock(null);
+    setDragging(null);
+    setDropBlock(null);
   };
   const action = useMutation({
     mutationFn: async ({
@@ -211,7 +243,8 @@ function Tasks() {
   const rows = (view === "history" ? (history.data ?? []) : (agenda.data ?? []))
     .filter(
       (t) =>
-        !t.archived_at && t.title.toLowerCase().includes(search.toLowerCase()) &&
+        !t.archived_at &&
+        t.title.toLowerCase().includes(search.toLowerCase()) &&
         (priority === "all" || t.priority === priority) &&
         (owner === "all" || t.owner_id === owner) &&
         (creator === "all" || t.creator_id === creator) &&
@@ -238,17 +271,48 @@ function Tasks() {
         people.data?.find((p) => p.id === id)?.email ||
         (id ? "Assigned member" : "Unassigned");
   const renderCard = (t: Execution) => {
-    const allowed = !!me && !t.archived_at && !t.projected && t.status !== "cancelled" && (canExecute(t, me.id, me.isExec) || !!t.visible_to_creator);
+    const allowed =
+      !!me &&
+      !t.archived_at &&
+      !t.projected &&
+      t.status !== "cancelled" &&
+      (canExecute(t, me.id, me.isExec) || !!t.visible_to_creator);
     const overdueState = executionOverdue(t, now);
     return (
       <article key={t.id} className="min-w-0 rounded-md border bg-card p-3">
         <div className="mb-2 flex items-center justify-between gap-2">
           {canMoveExecution(t, !!me?.isExec) && t.scheduled_date ? (
-            <Button variant="ghost" size="icon" className="h-8 w-8 cursor-grab" aria-label={`Drag ${t.title}`} title="Drag to a time block or choose Move" draggable
-              onDragStart={e => {e.dataTransfer.setData("text/plain", t.id); e.dataTransfer.effectAllowed="move"; setDragging(t);}}
-              onDragEnd={() => {setDragging(null); setDropBlock(null);}}><GripVertical className="h-4 w-4" /></Button>
-          ) : <span />}
-          {me?.isExec && t.status === "done" && <Checkbox aria-label={`Select ${t.title}`} checked={selected.includes(t.id)} onCheckedChange={checked => setSelected(ids => checked ? [...ids, t.id] : ids.filter(id => id !== t.id))} />}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 cursor-grab"
+              aria-label={`Drag ${t.title}`}
+              title="Drag to a time block or choose Move"
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData("text/plain", t.id);
+                e.dataTransfer.effectAllowed = "move";
+                setDragging(t);
+              }}
+              onDragEnd={() => {
+                setDragging(null);
+                setDropBlock(null);
+              }}
+            >
+              <GripVertical className="h-4 w-4" />
+            </Button>
+          ) : (
+            <span />
+          )}
+          {me?.isExec && t.status === "done" && (
+            <Checkbox
+              aria-label={`Select ${t.title}`}
+              checked={selected.includes(t.id)}
+              onCheckedChange={(checked) =>
+                setSelected((ids) => (checked ? [...ids, t.id] : ids.filter((id) => id !== t.id)))
+              }
+            />
+          )}
         </div>
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
           <div className="min-w-0">
@@ -305,8 +369,23 @@ function Tasks() {
           )}
         </div>
         <div className="mt-2 flex flex-wrap justify-end gap-2">
-          {canMoveExecution(t, !!me?.isExec) && <Button variant="ghost" size="sm" aria-label={`Move ${t.title}`} onClick={() => setMoving(t)}><ArrowRightLeft className="h-4 w-4" />Move</Button>}
-          {!t.projected && !t.archived_at && (me?.isExec || t.owner_id === me?.id) && <Button variant="ghost" size="sm" onClick={() => setDeleting([t])}><Trash2 className="h-4 w-4" />Delete Execution</Button>}
+          {canMoveExecution(t, !!me?.isExec) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label={`Move ${t.title}`}
+              onClick={() => setMoving(t)}
+            >
+              <ArrowRightLeft className="h-4 w-4" />
+              Move
+            </Button>
+          )}
+          {!t.projected && !t.archived_at && (me?.isExec || t.owner_id === me?.id) && (
+            <Button variant="ghost" size="sm" onClick={() => setDeleting([t])}>
+              <Trash2 className="h-4 w-4" />
+              Delete Execution
+            </Button>
+          )}
         </div>
       </article>
     );
@@ -389,7 +468,9 @@ function Tasks() {
           <TabsTrigger className="min-h-11" value="schedule">
             Daily Schedule
           </TabsTrigger>
-          <TabsTrigger className="min-h-11" value="overdue">Overdue</TabsTrigger>
+          <TabsTrigger className="min-h-11" value="overdue">
+            Overdue
+          </TabsTrigger>
           <TabsTrigger className="min-h-11" value="list">
             List
           </TabsTrigger>
@@ -471,10 +552,29 @@ function Tasks() {
           )}
         </div>
       </details>
-      {me?.isExec && (view === "history" || view === "board" || status === "done") && rows.some(t => t.status === "done") && <div className="flex flex-wrap gap-2">
-        <Button variant="outline" onClick={() => setDeleting(rows.filter(t => t.status === "done" && selected.includes(t.id)))} disabled={!rows.some(t => t.status === "done" && selected.includes(t.id))}><Trash2 className="h-4 w-4" />Delete Selected Completed</Button>
-        <Button variant="outline" onClick={() => setDeleting(rows.filter(t => t.status === "done"))}><Trash2 className="h-4 w-4" />Delete Filtered Completed ({rows.filter(t => t.status === "done").length})</Button>
-      </div>}
+      {me?.isExec &&
+        (view === "history" || view === "board" || status === "done") &&
+        rows.some((t) => t.status === "done") && (
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={() =>
+                setDeleting(rows.filter((t) => t.status === "done" && selected.includes(t.id)))
+              }
+              disabled={!rows.some((t) => t.status === "done" && selected.includes(t.id))}
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete Selected Completed
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setDeleting(rows.filter((t) => t.status === "done"))}
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete Filtered Completed ({rows.filter((t) => t.status === "done").length})
+            </Button>
+          </div>
+        )}
       {agenda.error ? (
         <ErrorNote error={agenda.error} retry={() => agenda.refetch()} />
       ) : agenda.isLoading ? (
@@ -551,25 +651,60 @@ function Tasks() {
       ) : (
         <div className="space-y-7">
           <div className="grid min-w-0 gap-5 md:grid-cols-2 xl:grid-cols-3">
-            {BOARD_BLOCKS.map(block => {
-              const blockRows = todayRows.filter(t => blockForTime(t.due_time)?.id === block.id);
+            {BOARD_BLOCKS.map((block) => {
+              const blockRows = todayRows.filter((t) => blockForTime(t.due_time)?.id === block.id);
               const current = date === agencyDate(now) && currentBlock(now)?.id === block.id;
-              return <section key={block.id} aria-label={`${block.label} time block`} data-block={block.id}
-                className={`min-w-0 border-t-2 pt-3 ${current || dropBlock === block.id ? "border-gold" : "border-border"}`}
-                onDragOver={e => {if (dragging) {e.preventDefault(); e.dataTransfer.dropEffect="move"; setDropBlock(block.id);}}}
-                onDragLeave={e => {if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropBlock(null);}}
-                onDrop={e => {e.preventDefault(); dropTask(block.id);}}>
-                <header className="mb-3 grid grid-cols-[minmax(0,1fr)_auto] gap-2">
-                  <div><h2 className="text-sm font-semibold">{block.label} {current && <span className="ml-1 text-xs text-gold">Now</span>}</h2><p className="text-xs text-muted-foreground">{block.start}–{block.end}</p></div><span className="text-sm text-muted-foreground">{blockRows.length}</span>
-                </header>
-                <div className={`min-h-24 space-y-2 ${dragging ? "rounded-md border border-dashed border-gold p-2" : ""}`}>
-                  {blockRows.map(renderCard)}
-                  {!blockRows.length && <p className="py-5 text-center text-xs text-muted-foreground">{dragging ? "Drop Here" : "No Tasks"}</p>}
-                </div>
-              </section>;
+              return (
+                <section
+                  key={block.id}
+                  aria-label={`${block.label} time block`}
+                  data-block={block.id}
+                  className={`min-w-0 border-t-2 pt-3 ${current || dropBlock === block.id ? "border-gold" : "border-border"}`}
+                  onDragOver={(e) => {
+                    if (dragging) {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "move";
+                      setDropBlock(block.id);
+                    }
+                  }}
+                  onDragLeave={(e) => {
+                    if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropBlock(null);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    dropTask(block.id);
+                  }}
+                >
+                  <header className="mb-3 grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+                    <div>
+                      <h2 className="text-sm font-semibold">
+                        {block.label}{" "}
+                        {current && <span className="ml-1 text-xs text-gold">Now</span>}
+                      </h2>
+                      <p className="text-xs text-muted-foreground">
+                        {block.start}–{block.end}
+                      </p>
+                    </div>
+                    <span className="text-sm text-muted-foreground">{blockRows.length}</span>
+                  </header>
+                  <div
+                    className={`min-h-24 space-y-2 ${dragging ? "rounded-md border border-dashed border-gold p-2" : ""}`}
+                  >
+                    {blockRows.map(renderCard)}
+                    {!blockRows.length && (
+                      <p className="py-5 text-center text-xs text-muted-foreground">
+                        {dragging ? "Drop Here" : "No Tasks"}
+                      </p>
+                    )}
+                  </div>
+                </section>
+              );
             })}
           </div>
-          {section("No Time", todayRows.filter(t => !t.due_time))}
+          {section(
+            "No Time",
+            todayRows.filter((t) => !t.due_time),
+          )}
           {active.some((t) => !t.scheduled_date) &&
             section(
               "No date",
@@ -597,8 +732,46 @@ function Tasks() {
           onAction={(act, body) => action.mutate({ task: currentDetails, action: act, body })}
         />
       )}
-      {moving && <MoveDialog task={moving} rows={agenda.data ?? []} pending={move.isPending} onClose={() => setMoving(null)} onSave={(time, targetDate) => move.mutate({task:moving,time,targetDate})} />}
-      {deleting.length > 0 && <Dialog open onOpenChange={open => !open && setDeleting([])}><DialogContent><DialogHeader><DialogTitle>Delete {deleting.length} Execution{deleting.length === 1 ? "" : "s"}?</DialogTitle><DialogDescription>Comments and history will be retained in the archive. Recurring rules and future executions remain unchanged.</DialogDescription></DialogHeader><p className="text-sm">{deleting.length} record{deleting.length === 1 ? "" : "s"} will be removed from the agenda.</p><div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setDeleting([])}>Cancel</Button><Button variant="destructive" disabled={archive.isPending} onClick={() => archive.mutate(deleting)}>Confirm Deletion ({deleting.length})</Button></div></DialogContent></Dialog>}
+      {moving && (
+        <MoveDialog
+          task={moving}
+          rows={agenda.data ?? []}
+          pending={move.isPending}
+          onClose={() => setMoving(null)}
+          onSave={(time, targetDate) => move.mutate({ task: moving, time, targetDate })}
+        />
+      )}
+      {deleting.length > 0 && (
+        <Dialog open onOpenChange={(open) => !open && setDeleting([])}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>
+                Delete {deleting.length} Execution{deleting.length === 1 ? "" : "s"}?
+              </DialogTitle>
+              <DialogDescription>
+                Comments and history will be retained in the archive. Recurring rules and future
+                executions remain unchanged.
+              </DialogDescription>
+            </DialogHeader>
+            <p className="text-sm">
+              {deleting.length} record{deleting.length === 1 ? "" : "s"} will be removed from the
+              agenda.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setDeleting([])}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                disabled={archive.isPending}
+                onClick={() => archive.mutate(deleting)}
+              >
+                Confirm Deletion ({deleting.length})
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
       {editing && me?.isExec && (
         <ConfigurationDialog
           task={editing === "new" ? null : editing}
@@ -678,7 +851,15 @@ function ExecutionDetails({
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-5">
-          {allowed && !["cancelled","skipped"].includes(task.status) && <Button disabled={pending || (!!task.scheduled_date && task.scheduled_date > agencyDate())} onClick={() => onAction(task.status === "done" ? "reopen" : "complete")}><Check className="h-4 w-4" />{task.status === "done" ? "Reopen" : "Complete"}</Button>}
+          {allowed && !["cancelled", "skipped"].includes(task.status) && (
+            <Button
+              disabled={pending || (!!task.scheduled_date && task.scheduled_date > agencyDate())}
+              onClick={() => onAction(task.status === "done" ? "reopen" : "complete")}
+            >
+              <Check className="h-4 w-4" />
+              {task.status === "done" ? "Reopen" : "Complete"}
+            </Button>
+          )}
           <section>
             <h3 className="mb-2 font-medium">Description & Instructions</h3>
             <p className="whitespace-pre-wrap break-words text-sm">
@@ -962,14 +1143,28 @@ function ConfigurationDialog({
             <Filter
               label="Linked Creator"
               value={f.creator_id || "none"}
-              onChange={(v) => setF({ ...f, creator_id: v === "none" ? "" : v, visible_to_creator: v === "none" ? false : f.visible_to_creator })}
+              onChange={(v) =>
+                setF({
+                  ...f,
+                  creator_id: v === "none" ? "" : v,
+                  visible_to_creator: v === "none" ? false : f.visible_to_creator,
+                })
+              }
               options={[
                 { value: "none", label: "No creator" },
                 ...creators.map((c) => ({ value: c.id, label: c.stage_name })),
               ]}
             />
           </div>
-          <div className="flex min-h-11 items-center gap-3"><Checkbox id="creator-visible" disabled={!f.creator_id} checked={f.visible_to_creator} onCheckedChange={checked => setF({...f, visible_to_creator: checked === true})} /><Label htmlFor="creator-visible">Visible In Creator VenusOS</Label></div>
+          <div className="flex min-h-11 items-center gap-3">
+            <Checkbox
+              id="creator-visible"
+              disabled={!f.creator_id}
+              checked={f.visible_to_creator}
+              onCheckedChange={(checked) => setF({ ...f, visible_to_creator: checked === true })}
+            />
+            <Label htmlFor="creator-visible">Visible In Creator VenusOS</Label>
+          </div>
           {save.error && <ErrorNote error={save.error} />}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={onClose}>
@@ -987,13 +1182,72 @@ function ConfigurationDialog({
   );
 }
 
-function MoveDialog({task, rows, pending, onClose, onSave}: {task:Execution;rows:Execution[];pending:boolean;onClose:()=>void;onSave:(time:string,date:string)=>void}) {
-  const [time,setTime] = useState(task.due_time?.slice(0,5) ?? "09:00");
-  const [date,setDate] = useState(task.scheduled_date ?? agencyDate());
-  return <Dialog open onOpenChange={open => !open && onClose()}><DialogContent><DialogHeader><DialogTitle>Move Execution</DialogTitle><DialogDescription>{task.title}</DialogDescription></DialogHeader><div className="space-y-3">
-    <Label>Move To Time Block</Label><Filter label="Move To Time Block" value={blockForTime(time)?.id ?? "morning"} onChange={id => {const block=BOARD_BLOCKS.find(b=>b.id===id); if(block) {const next=timeInBlock(block,{...task,scheduled_date:date},rows); if(next) setTime(next); else toast.error("This block is full. Choose a time.");}}} options={BOARD_BLOCKS.map(b=>({value:b.id,label:`${b.label} · ${b.start}–${b.end}`}))}/>
-    <Label htmlFor="move-date">Date</Label><Input id="move-date" type="date" required value={date} onChange={e=>setDate(e.target.value)}/>
-    <Label htmlFor="move-time">Exact Time</Label><Input id="move-time" type="time" required value={time} onChange={e=>setTime(e.target.value)}/>
-    <div className="flex justify-end gap-2"><Button variant="outline" onClick={onClose}>Cancel</Button><Button disabled={pending || !date || !time} onClick={()=>onSave(time,date)}>Save Schedule</Button></div>
-  </div></DialogContent></Dialog>;
+function MoveDialog({
+  task,
+  rows,
+  pending,
+  onClose,
+  onSave,
+}: {
+  task: Execution;
+  rows: Execution[];
+  pending: boolean;
+  onClose: () => void;
+  onSave: (time: string, date: string) => void;
+}) {
+  const [time, setTime] = useState(task.due_time?.slice(0, 5) ?? "09:00");
+  const [date, setDate] = useState(task.scheduled_date ?? agencyDate());
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Move Execution</DialogTitle>
+          <DialogDescription>{task.title}</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <Label>Move To Time Block</Label>
+          <Filter
+            label="Move To Time Block"
+            value={blockForTime(time)?.id ?? "morning"}
+            onChange={(id) => {
+              const block = BOARD_BLOCKS.find((b) => b.id === id);
+              if (block) {
+                const next = timeInBlock(block, { ...task, scheduled_date: date }, rows);
+                if (next) setTime(next);
+                else toast.error("This block is full. Choose a time.");
+              }
+            }}
+            options={BOARD_BLOCKS.map((b) => ({
+              value: b.id,
+              label: `${b.label} · ${b.start}–${b.end}`,
+            }))}
+          />
+          <Label htmlFor="move-date">Date</Label>
+          <Input
+            id="move-date"
+            type="date"
+            required
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+          />
+          <Label htmlFor="move-time">Exact Time</Label>
+          <Input
+            id="move-time"
+            type="time"
+            required
+            value={time}
+            onChange={(e) => setTime(e.target.value)}
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button disabled={pending || !date || !time} onClick={() => onSave(time, date)}>
+              Save Schedule
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 }
