@@ -154,7 +154,7 @@ export function assertAuthLink(search: string, hash: string, expected: "signup" 
     throw new Error("This authentication link is invalid, already used or expired. Request a new link.");
   }
   const type = params.get("type");
-  if (type && type !== expected && !(expected === "signup" && type === "email")) {
+  if (type && type !== expected && !(expected === "signup" && (type === "email" || type === "magiclink"))) {
     throw new Error("This link is not valid for this action.");
   }
   if (!params.get("code") && !(type && (params.get("token_hash") || (params.get("access_token") && params.get("refresh_token"))))) {
@@ -183,7 +183,7 @@ async function verifyAuthLinkOnce(
   const tokenHash = params.get("token_hash");
   if (tokenHash) {
     const type = params.get("type");
-    if (type !== expected && !(expected === "signup" && type === "email")) {
+    if (type !== expected && !(expected === "signup" && (type === "email" || type === "magiclink"))) {
       throw new Error("This link is not valid for this action.");
     }
     const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
