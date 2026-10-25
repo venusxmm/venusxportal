@@ -807,7 +807,7 @@ function Filter({
       <SelectContent>
         {options.map((o) => (
           <SelectItem key={o.value} value={o.value}>
-            {titleCase(o.label)}
+            {o.value === "all" || o.value === "none" || ["low", "medium", "high", "critical", "done", "skipped", "cancelled", "enabled", "paused", "disabled", "once", "daily", "weekdays"].includes(o.value) ? titleCase(o.label) : o.label}
           </SelectItem>
         ))}
       </SelectContent>
@@ -925,8 +925,8 @@ function ExecutionDetails({
               {(events.data ?? []).map((e) => (
                 <li key={e.id} className="border-l-2 border-gold-soft pl-3">
                   <p className="whitespace-pre-wrap break-words text-sm">
-                    {e.action === "comment" ? e.body : e.action.replaceAll("_", " ")}
-                    {e.action !== "comment" && e.body ? ` · ${e.body}` : ""}
+                    {e.action === "comment" ? e.body : titleCase(e.action)}
+                    {e.action !== "comment" && e.body ? ` · ${eventBody(e.action, e.body)}` : ""}
                   </p>
                   <time className="text-xs text-muted-foreground">
                     {new Date(e.created_at).toLocaleString("en", { timeZone: "America/Bogota" })}
