@@ -57,6 +57,7 @@ import {
 
 type Task = Database["public"]["Tables"]["tasks"]["Row"];
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MEMBER_TYPES = ["all", "creator", "employee", "executive", "partner"];
 const metaDescription = "Your dated VenusX task agenda, recurring work and execution history.";
 export const Route = createFileRoute("/_authenticated/tasks")({
   head: () => ({
@@ -530,14 +531,14 @@ function Tasks() {
           <TabsTrigger className="min-h-11" value="history">
             History
           </TabsTrigger>
-          <TabsTrigger className="min-h-11" value="archive">
-            Archive
-          </TabsTrigger>
           {me?.isExec && (
             <TabsTrigger className="min-h-11" value="manage">
               Manage
             </TabsTrigger>
           )}
+          <TabsTrigger className="min-h-11" value="archive">
+            Archive
+          </TabsTrigger>
         </TabsList>
       </Tabs>
       <details
@@ -806,6 +807,33 @@ function Tasks() {
           onClose={() => setMoving(null)}
           onSave={(time, targetDate) => move.mutate({ task: moving, time, targetDate })}
         />
+      )}
+      {deletingTask && me?.isExec && (
+        <Dialog open onOpenChange={(open) => !open && setDeletingTask(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete “{deletingTask.title}”?</DialogTitle>
+              <DialogDescription>
+                This disables the whole task
+                {deletingTask.recurrence === "once" ? "" : " and its recurring series"}: no future
+                executions will be created. Past executions, completions and comments stay in
+                History. To remove only one day, use “Delete Execution” on that day's card instead.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setDeletingTask(null)}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                disabled={stopSeries.isPending}
+                onClick={() => stopSeries.mutate(deletingTask)}
+              >
+                {deletingTask.recurrence === "once" ? "Delete task" : "Stop recurring series"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
       {deleting.length > 0 && (
         <Dialog open onOpenChange={(open) => !open && setDeleting([])}>
