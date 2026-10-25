@@ -116,6 +116,27 @@ function Tasks() {
       return data as Execution[];
     },
   });
+  const blockRows = useQuery({
+    queryKey: ["tasks", "time-blocks"],
+    enabled: !!me,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("task_time_blocks")
+        .select("id,label,start_time,end_time,position")
+        .order("position");
+      if (error) throw error;
+      return data;
+    },
+  });
+  const blocks: BoardBlock[] = blockRows.data?.length
+    ? blockRows.data.map((b) => ({
+        id: b.id,
+        label: b.label,
+        start: b.start_time.slice(0, 5),
+        end: b.end_time.slice(0, 5) === "00:00" ? "24:00" : b.end_time.slice(0, 5),
+      }))
+    : BOARD_BLOCKS;
+  const [editingBlocks, setEditingBlocks] = useState(false);
   const configurations = useQuery({
     queryKey: ["tasks", "configurations"],
     enabled: !!me?.isExec,
@@ -219,6 +240,16 @@ function Tasks() {
   });
   const archive = useMutation({
     mutationFn: async (tasks: Execution[]) => {
+      const only = tasks[0];
+      if (tasks.length === 1 && only?.projected && only.scheduled_date) {
+        const { error } = await supabase.rpc("task_future_action", {
+          _task_id: only.task_id,
+          _date: only.scheduled_date,
+          _action: "archive",
+        });
+        if (error) throw error;
+        return;
+      }
       const { error } = await supabase.rpc("archive_task_executions", {
         _ids: tasks.map((t) => t.id),
         _confirm_count: tasks.length,
@@ -237,7 +268,7 @@ function Tasks() {
     onError: (error) => toast.error(error.message),
   });
   const dropTask = (blockId: string) => {
-    const block = BOARD_BLOCKS.find((b) => b.id === blockId);
+    const block = blocks.find((b) => b.id === blockId);
     if (dragging && block && canMoveExecution(dragging, !!me?.isExec)) {
       const time = timeInBlock(block, dragging, agenda.data ?? []);
       if (time) move.mutate({ task: dragging, time });
@@ -371,7 +402,7 @@ function Tasks() {
               className={`mb-2 flex items-center gap-2 text-sm font-medium ${overdueState ? "text-destructive" : "text-gold"}`}
             >
               <Clock className="h-4 w-4 shrink-0" />
-              {t.due_time?.slice(0, 5) || "No time"}
+              {formatTime12(t.due_time)}
               {t.recurring && <Repeat2 className="h-4 w-4 shrink-0" aria-label="Recurring" />}
             </p>
             <h3
@@ -385,7 +416,17 @@ function Tasks() {
           </div>
           <Pill
             value={overdueState ? "overdue" : t.status}
-            label={overdueState ? "Overdue" : t.status === "todo" ? "Pending" : undefined}
+            label={
+              overdueState
+                ? "Overdue"
+                : t.status === "skipped"
+                  ? "Skipped"
+                  : t.skip_state === "pending"
+                    ? "Skip Requested"
+                    : t.status === "todo"
+                      ? "Pending"
+                      : undefined
+            }
           />
         </div>
         {t.skip_state === "pending" && (
@@ -445,7 +486,10 @@ function Tasks() {
               Move
             </Button>
           )}
-          {!t.projected && !t.archived_at && (me?.isExec || t.owner_id === me?.id) && (
+          {!t.archived_at &&
+            t.status !== "cancelled" &&
+            (!t.projected || (!!t.scheduled_date && t.scheduled_date > agencyDate(now))) &&
+            (me?.isExec || t.owner_id === me?.id) && (
             <Button variant="ghost" size="sm" onClick={() => setDeleting([t])}>
               <Trash2 className="h-4 w-4" />
               Delete Execution
@@ -744,9 +788,11 @@ function Tasks() {
       ) : (
         <div className="space-y-7">
           <div className="grid min-w-0 gap-5 md:grid-cols-2 xl:grid-cols-3">
-            {BOARD_BLOCKS.map((block) => {
-              const blockRows = todayRows.filter((t) => blockForTime(t.due_time)?.id === block.id);
-              const current = date === agencyDate(now) && currentBlock(now)?.id === block.id;
+            {blocks.map((block) => {
+              const blockRows = todayRows.filter(
+                (t) => blockForTime(t.due_time, blocks)?.id === block.id,
+              );
+              const current = date === agencyDate(now) && currentBlock(now, blocks)?.id === block.id;
               return (
                 <section
                   key={block.id}
@@ -775,7 +821,7 @@ function Tasks() {
                         {current && <span className="ml-1 text-xs text-gold">Now</span>}
                       </h2>
                       <p className="text-xs text-muted-foreground">
-                        {block.start}–{block.end}
+                        {formatTime12(block.start)}–{formatTime12(block.end)}
                       </p>
                     </div>
                     <span className="text-sm text-muted-foreground">{blockRows.length}</span>
@@ -794,6 +840,11 @@ function Tasks() {
               );
             })}
           </div>
+          {todayRows.some((t) => t.due_time && !blockForTime(t.due_time, blocks)) &&
+            section(
+              "Unscheduled Hours",
+              todayRows.filter((t) => t.due_time && !blockForTime(t.due_time, blocks)),
+            )}
           {section(
             "No Time",
             todayRows.filter((t) => !t.due_time),
@@ -805,7 +856,7 @@ function Tasks() {
             )}
           <details className="border-t pt-4">
             <summary className="cursor-pointer text-sm font-medium">
-              Completed & cancelled · {completed.length}
+              Done & Skipped · {completed.length}
             </summary>
             <div className="mt-4 grid gap-3 lg:grid-cols-2">{completed.map(renderCard)}</div>
           </details>
@@ -985,7 +1036,7 @@ function ExecutionDetails({
         <DialogHeader>
           <DialogTitle className="break-words">{task.title}</DialogTitle>
           <DialogDescription>
-            {task.scheduled_date || "No date"} · {task.due_time?.slice(0, 5) || "No time"} ·
+            {task.scheduled_date || "No date"} · {formatTime12(task.due_time)} ·
             America/Bogota
           </DialogDescription>
         </DialogHeader>
