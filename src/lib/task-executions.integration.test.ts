@@ -80,6 +80,8 @@ beforeAll(async () => {
     readFileSync("drizzle/migrations/0029_task_occurrence_schedule_independence.sql", "utf8"),
   );
   await db.exec(readFileSync("drizzle/migrations/0031_task_portal_blocks_today_edits_apply.sql", "utf8"));
+  await db.exec(`create table if not exists public.audit_events(id uuid default gen_random_uuid(),actor_id uuid,entity text,entity_id uuid,action text,details jsonb,created_at timestamptz default now())`);
+  await db.exec(readFileSync("drizzle/migrations/0032_task_trash_lifecycle.sql", "utf8").replaceAll("--> statement-breakpoint", ""));
 }, 30000);
 afterAll(async () => {
   await db.close();
@@ -533,3 +535,74 @@ describe("execution security and recurrence SQL", () => {
     ).toEqual([{ archived: true }]);
   });
 });
+describe("trash lifecycle", () => {
+  const portal = async (d1: string, d2: string) =>
+    (
+      (await as(creatorUser, `select creator_portal_tasks('${d1}','${d2}') as t`)).rows[0] as {
+        t: { task_id: string; scheduled_date: string }[];
+      }
+    ).t;
+  const agenda = async (user: string, d: string) =>
+    (
+      (await as(user, `select task_agenda('${d}') as a`)).rows[0] as {
+        a: { task_id: string; scheduled_date: string; status: string }[];
+      }
+    ).a;
+  it("published series disappears from portal and agenda when trashed, and returns on restore without duplicates", async () => {
+    const tid = await create({ owner_id: creatorUser, creator_id: other, visible_to_creator: true });
+    expect((await portal("2026-10-25", "2026-10-28")).some((e) => e.task_id === tid)).toBe(true);
+    await as(exec, "select trash_task_series($1)", [tid]);
+    expect((await portal("2026-10-25", "2026-10-28")).some((e) => e.task_id === tid)).toBe(false);
+    expect((await agenda(exec, "2026-10-27")).some((e) => e.task_id === tid)).toBe(false);
+    await as(exec, "select restore_task_series($1)", [tid]);
+    await agenda(exec, "2026-10-27");
+    const rows = (await portal("2026-10-25", "2026-10-28")).filter((e) => e.task_id === tid);
+    const dates = rows.map((r) => r.scheduled_date);
+    expect(dates.length).toBe(new Set(dates).size);
+    expect(dates).toContain("2026-10-27");
+  });
+  it("trashing one occurrence keeps other dates; restoring it brings back only that date", async () => {
+    const tid = await create({});
+    const today = (await db.query<{ d: string }>("select ((now() at time zone 'America/Bogota')::date)::text d")).rows[0]!.d;
+    await agenda(exec, today);
+    const eid = await execution(tid, today);
+    await as(exec, "select archive_task_executions($1::uuid[],1,false)", [[eid]]);
+    expect((await agenda(exec, today)).some((e) => e.task_id === tid && e.scheduled_date === today)).toBe(false);
+    await as(exec, "select restore_task_executions($1::uuid[],1)", [[eid]]);
+    expect((await agenda(exec, today)).filter((e) => e.task_id === tid && e.scheduled_date === today)).toHaveLength(1);
+  });
+  it("only executives trash, restore or purge, and counts must match", async () => {
+    const tid = await create({});
+    await expect(as(owner, "select trash_task_series($1)", [tid])).rejects.toThrow("Executive required");
+    await as(exec, "select trash_task_series($1)", [tid]);
+    await expect(as(owner, "select restore_task_series($1)", [tid])).rejects.toThrow("Executive required");
+    await expect(as(owner, "select purge_tasks($1::uuid[],1)", [[tid]])).rejects.toThrow("Executive required");
+    await expect(as(exec, "select purge_tasks($1::uuid[],2)", [[tid]])).rejects.toThrow("exact number");
+  });
+  it("purging a trashed task removes it and all its rows; an untrashed task cannot be purged", async () => {
+    const keep = await create({});
+    const tid = await create({});
+    await as(exec, "select trash_task_series($1)", [tid]);
+    await expect(as(exec, "select purge_tasks($1::uuid[],1)", [[keep]])).rejects.toThrow("Only tasks in Trash");
+    await as(exec, "select purge_tasks($1::uuid[],1)", [[tid]]);
+    for (const t of ["tasks where id", "task_executions where task_id", "task_revisions where task_id"])
+      expect((await db.query(`select 1 from ${t}=$1`, [tid])).rows).toHaveLength(0);
+    expect((await db.query("select 1 from tasks where id=$1", [keep])).rows).toHaveLength(1);
+  });
+  it("purging one occurrence of a live series never regenerates that date", async () => {
+    const tid = await create({});
+    const today = (await db.query<{ d: string }>("select ((now() at time zone 'America/Bogota')::date)::text d")).rows[0]!.d;
+    await agenda(exec, today);
+    const eid = await execution(tid, today);
+    await as(exec, "select archive_task_executions($1::uuid[],1,false)", [[eid]]);
+    await as(exec, "select purge_task_executions($1::uuid[],1)", [[eid]]);
+    expect((await agenda(exec, today)).some((e) => e.task_id === tid && e.scheduled_date === today)).toBe(false);
+    expect((await agenda(exec, shiftDay(today))).some((e) => e.task_id === tid)).toBe(true);
+  });
+});
+function shiftDay(d: string) {
+  const x = new Date(`${d}T12:00:00Z`);
+  x.setUTCDate(x.getUTCDate() + 1);
+  return x.toISOString().slice(0, 10);
+}
+
