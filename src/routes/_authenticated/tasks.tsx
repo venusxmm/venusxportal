@@ -988,14 +988,16 @@ function Filter({
   value,
   onChange,
   options,
+  disabled,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   options: { value: string; label: string }[];
+  disabled?: boolean;
 }) {
   return (
-    <Select value={value} onValueChange={onChange}>
+    <Select value={value} onValueChange={onChange} disabled={disabled}>
       <SelectTrigger aria-label={label} className="h-11 min-w-0">
         <SelectValue />
       </SelectTrigger>
