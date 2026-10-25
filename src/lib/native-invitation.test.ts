@@ -1,28 +1,26 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from "vitest";
-import { deliverRegisteredInvitation, INVITATION_REDIRECT } from "./native-invitation";
+import { deliverInvitationEmail, INVITATION_REDIRECT } from "./native-invitation";
 
 describe("native invitation delivery", () => {
   it("uses only the explicit Vercel callback", () => {
     expect(INVITATION_REDIRECT).toBe("https://venusxportal.vercel.app/auth/callback");
   });
-  it("registers before sending exactly one native email", async () => {
-    const order: string[] = [];
-    const send = vi.fn(async () => { order.push("send"); });
-    const revoke = vi.fn();
-    expect(await deliverRegisteredInvitation(async () => { order.push("register"); return "qa"; }, send, revoke)).toEqual({ id: "qa", sent: true });
-    expect(order).toEqual(["register", "send"]);
-    expect(send).toHaveBeenCalledTimes(1);
-    expect(revoke).not.toHaveBeenCalled();
+  it("new identity gets exactly one account invitation", async () => {
+    const link = vi.fn();
+    expect(await deliverInvitationEmail(async () => null, link)).toEqual({ status: "sent", method: "invite" });
+    expect(link).not.toHaveBeenCalled();
   });
-  it("never sends when backend registration rejects access", async () => {
-    const send = vi.fn();
-    await expect(deliverRegisteredInvitation(async () => { throw new Error("Forbidden"); }, send, vi.fn())).rejects.toThrow("Forbidden");
-    expect(send).not.toHaveBeenCalled();
+  it("existing identity (422 email_exists) gets a sign-in link instead of failing", async () => {
+    const link = vi.fn(async () => null);
+    const result = await deliverInvitationEmail(async () => ({ code: "email_exists", status: 422, message: "A user with this email address has already been registered" }), link);
+    expect(result).toEqual({ status: "sent", method: "sign_in_link" });
+    expect(link).toHaveBeenCalledTimes(1);
   });
-  it("revokes only the new invitation after failed sending", async () => {
-    const revoke = vi.fn().mockResolvedValue(undefined);
-    await expect(deliverRegisteredInvitation(async () => "qa-new", async () => { throw new Error("send failed"); }, revoke)).rejects.toThrow(/revoked/);
-    expect(revoke).toHaveBeenCalledWith("qa-new");
+  it("other provider errors are reported as failed, not sent", async () => {
+    const link = vi.fn();
+    const result = await deliverInvitationEmail(async () => ({ status: 429, message: "rate limit" }), link);
+    expect(result).toEqual({ status: "failed", method: "invite", error: "rate limit" });
+    expect(link).not.toHaveBeenCalled();
   });
 });

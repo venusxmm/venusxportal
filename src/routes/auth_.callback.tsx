@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { authLinkParameters, completeInvitation, verifyAuthLink } from "@/lib/auth-flow";
+import { authenticatedWorkspaceRoute, authLinkParameters, completeInvitation, verifyAuthLink } from "@/lib/auth-flow";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -45,13 +45,23 @@ function AuthCallbackPage() {
           );
         }
 
-        const isInvite = authLinkParameters(window.location.search, window.location.hash).get("type") === "invite";
+        const linkType = authLinkParameters(window.location.search, window.location.hash).get("type");
+        const isInvite = linkType === "invite";
         await verifyAuthLink(window.location.search, window.location.hash, isInvite ? "invite" : "signup");
         if (!active) return;
         if (isInvite) {
           window.history.replaceState(null, "", "/auth/callback");
           setMessage("Your invitation is verified. Choose your password.");
           setState("password");
+          return;
+        }
+
+        if (linkType === "magiclink") {
+          // Existing identity invited to a new membership: the verified link signs them in,
+          // and the backend accepts only the invitation registered for this exact email.
+          setMessage("Email verified. Opening your workspace…");
+          window.history.replaceState(null, "", "/auth/callback");
+          window.location.replace(await authenticatedWorkspaceRoute());
           return;
         }
 

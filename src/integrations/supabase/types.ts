@@ -157,9 +157,13 @@ export type Database = {
           created_at: string
           created_by: string
           creator_id: string | null
+          delivery_error: string | null
+          delivery_method: string | null
+          delivery_status: string
           email: string
           expires_at: string
           id: string
+          last_sent_at: string | null
           recovery_user_id: string | null
           revoked_at: string | null
           role: Database["public"]["Enums"]["app_role"]
@@ -171,9 +175,13 @@ export type Database = {
           created_at?: string
           created_by?: string
           creator_id?: string | null
+          delivery_error?: string | null
+          delivery_method?: string | null
+          delivery_status?: string
           email: string
           expires_at?: string
           id?: string
+          last_sent_at?: string | null
           recovery_user_id?: string | null
           revoked_at?: string | null
           role: Database["public"]["Enums"]["app_role"]
@@ -185,9 +193,13 @@ export type Database = {
           created_at?: string
           created_by?: string
           creator_id?: string | null
+          delivery_error?: string | null
+          delivery_method?: string | null
+          delivery_status?: string
           email?: string
           expires_at?: string
           id?: string
+          last_sent_at?: string | null
           recovery_user_id?: string | null
           revoked_at?: string | null
           role?: Database["public"]["Enums"]["app_role"]

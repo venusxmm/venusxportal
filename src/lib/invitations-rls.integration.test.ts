@@ -22,6 +22,7 @@ const memberRecoveryMigration = readFileSync(
   "utf8",
 );
 const disableRecoveryMigration = readFileSync(resolve(process.cwd(), "drizzle/migrations/0022_disable_explicit_access_recovery.sql"), "utf8");
+const regrantMigration = readFileSync(resolve(process.cwd(), "drizzle/migrations/0023_invitation_delivery_and_explicit_regrant.sql"), "utf8");
 const memberAccessSql = readFileSync(resolve(process.cwd(), "drizzle/migrations/0010_team_member_removal.sql"), "utf8");
 const memberAccessFunctions = memberAccessSql.slice(memberAccessSql.indexOf("create or replace function public.revoke_team_member_access"), memberAccessSql.indexOf("create or replace function public.restore_team_member_on_role_grant"));
 const ids = {
@@ -159,6 +160,7 @@ describe("invitation row-level security integration", () => {
     await db.exec(memberRecoveryMigration);
     await db.exec(disableRecoveryMigration);
     await db.exec(memberAccessFunctions);
+    await db.exec(regrantMigration);
     await db.exec(`
       create trigger on_auth_user_created
       after insert on auth.users
@@ -318,10 +320,23 @@ describe("invitation row-level security integration", () => {
     const token = "e".repeat(64);
     await db.query("insert into public.creators(id,email,user_id) values($1,$2,$3)", [ids.revokedCreator,"recover.creator@example.test",ids.revokedUser]);
     await db.query("insert into public.invitations(email,token_hash,role,created_by,recovery_user_id) values($1,$2,'creator',$3,$4)", ["recover.creator@example.test",token,ids.executive,ids.revokedUser]);
-    await expect(asUser(ids.revokedUser, () => db.query(`select public.accept_invitation('${token}')`))).rejects.toThrow(/active account/i);
+    await expect(asUser(ids.revokedUser, () => db.query(`select public.accept_invitation('${token}')`))).rejects.toThrow(/legacy access invitation/i);
     await db.query("update public.invitations set revoked_at=now() where token_hash=$1", [token]);
-    await expect(asUser(ids.executive, () => db.query(`select public.create_invitation('recover.creator@example.test','${"9".repeat(64)}','creator')`))).rejects.toThrow(/access was revoked/i);
     expect((await db.query("select user_id from public.creators where id=$1",[ids.revokedCreator])).rows).toEqual([{user_id:ids.revokedUser}]);
+  });
+
+  it("restores removed access only through a new invitation accepted by the matching identity", async () => {
+    const stale = "7".repeat(64);
+    await db.query("insert into public.invitations(email,token_hash,role,created_by,created_at) values($1,$2,'executive',$3,now()-interval '1 day')", ["removed.member@example.test", stale, ids.executive]);
+    await expect(asUser(ids.removedUser, () => db.query(`select public.accept_invitation('${stale}')`))).rejects.toThrow(/predates the access removal/i);
+    await db.query("update public.invitations set revoked_at=now() where token_hash=$1", [stale]);
+    const fresh = "8".repeat(64);
+    await asUser(ids.executive, () => db.query(`select public.create_invitation('removed.member@example.test','${fresh}','employee')`));
+    await expect(asUser(ids.wrongUser, () => db.query(`select public.accept_invitation('${fresh}')`))).rejects.toThrow(/invited email/i);
+    await asUser(ids.removedUser, () => db.query(`select public.accept_invitation('${fresh}')`));
+    expect((await db.query("select role from public.user_roles where user_id=$1", [ids.removedUser])).rows).toEqual([{ role: "employee" }]);
+    expect((await db.query(`select public.is_active_member('${ids.removedUser}') as active`)).rows).toEqual([{ active: true }]);
+    await expect(asUser(ids.removedUser, () => db.query(`select public.accept_invitation('${stale}')`))).rejects.toThrow(/invalid or expired/i);
   });
 
   it("prevents non-executives from revoking invites and rejects revoked tokens", async () => {
