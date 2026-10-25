@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  validateBlocks,
   BOARD_BLOCKS,
   blockForTime,
   currentBlock,
@@ -55,7 +56,6 @@ describe("time block movement", () => {
     expect(canMoveExecution({ ...task, projected: true }, true)).toBe(true);
   });
 });
-import { validateBlocks } from "./task-board";
 describe("configurable blocks", () => {
   const night = { id: "n", label: "Night", start: "00:00", end: "04:00" };
   it("03:30 lands in Night", () => expect(blockForTime("03:30", [night])?.id).toBe("n"));
