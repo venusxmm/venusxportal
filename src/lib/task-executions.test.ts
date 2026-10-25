@@ -83,3 +83,15 @@ describe("portal labels and consistency", () => {
     expect(ownerCreatorConsistent({ owner_id: "u1", creator_id: "c1", visible_to_creator: true }, users, new Set(["u1"]))).toBe(true);
   });
 });
+
+import { portalStatus as ps } from "./task-executions";
+describe("portalStatus", () => {
+  const base = { id: "1", task_id: "t", title: "x", description: null, owner_id: null, creator_id: null, priority: "low", recurring: false, skip_state: "none", scheduled_date: "2026-10-25", due_time: "09:00" };
+  const now = new Date("2026-10-25T20:00:00Z");
+  it("labels done, skipped, overdue and pending", () => {
+    expect(ps({ ...base, status: "done" }, now)).toBe("Completed");
+    expect(ps({ ...base, status: "skipped" }, now)).toBe("Skipped");
+    expect(ps({ ...base, status: "todo" }, now)).toBe("Overdue");
+    expect(ps({ ...base, status: "todo", due_time: "23:00" }, now)).toBe("Pending");
+  });
+});
