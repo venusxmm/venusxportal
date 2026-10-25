@@ -218,6 +218,13 @@
       "when": 1792961223080,
       "tag": "0030_task_portal_blocks_today_edits",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1792961257553,
+      "tag": "0031_task_portal_blocks_today_edits_apply",
+      "breakpoints": true
     }
   ]
 }
