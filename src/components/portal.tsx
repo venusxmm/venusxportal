@@ -12,9 +12,9 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-      <div>
-        <h1 className="text-2xl font-semibold md:text-3xl">{title}</h1>
+    <div className="mb-6 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3 sm:flex sm:flex-wrap sm:justify-between">
+      <div className="min-w-0">
+        <h1 className="break-words text-2xl font-semibold uppercase md:text-3xl">{title}</h1>
         {subtitle && <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>}
       </div>
       {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
@@ -84,6 +84,10 @@ const tone: Record<string, string> = {
   onboarding: "border-gold/40 text-gold",
   in_progress: "border-gold/40 text-gold",
   review: "border-gold/40 text-gold",
+  overdue: "border-destructive/40 text-destructive",
+  skipped: "border-muted-foreground/40 text-muted-foreground",
+  cancelled: "border-muted-foreground/40 text-muted-foreground",
+  pending: "border-warning/40 text-warning",
   revenue: "border-success/40 text-success",
   expense: "border-destructive/40 text-destructive",
 };

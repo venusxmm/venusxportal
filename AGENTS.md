@@ -22,7 +22,7 @@
 - All ledger math goes through `src/lib/finance.ts` (`summarize`), per currency, in cents, excluding voided (`archived_at`) rows. Why: consistent, testable figures.
 - Ledger entries are voided (archived), never deleted; `external_ref` is unique to block duplicate imports. Why: traceability.
 - Automations insert with a unique `dedupe_key` + `on conflict do nothing` and log to `audit_events`. Why: idempotent retries.
-- Creators change task status only via the `creator_set_task_status` RPC. Why: they must not edit other task fields.
+- Task configurations use executive-only revision RPCs; task execution actions use owner/executive RPCs and owner-scoped RLS. Why: dated snapshots and append-only events preserve history while preventing owner configuration edits.
 - Modules not yet built appear in nav marked "Soon" and are non-clickable. Why: no dead or fake controls.
 
 - Team invitations: an executive-only server function registers one pending invitation per email, sends the native Auth invite (new identity) or a native sign-in link (existing identity, provider returns email_exists), and records delivery_status; failed sends stay pending for explicit resend/cancel. Why: honest delivery state without auto-revoking or duplicate identities.
