@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import {
@@ -459,6 +459,7 @@ function Tasks() {
       history.data?.find((t) => t.id === details.id) ??
       details)
     : null;
+  if (me?.isCreator && !me.isStaff) return <Navigate to="/portal" />;
   return (
     <div className="min-w-0 space-y-6">
       <PageHeader
