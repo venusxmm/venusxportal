@@ -1,0 +1,4 @@
+DO $$ DECLARE definition text; BEGIN SELECT pg_get_functiondef('public.save_task_configuration(uuid,jsonb)'::regprocedure) INTO definition;
+definition:=replace(definition,'IF old_task.recurrence=''once'' AND EXISTS(SELECT 1 FROM public.task_executions WHERE task_id=_task_id AND status<>''cancelled'' AND (scheduled_date<=today OR scheduled_date IS NULL OR status=''done'')) THEN RAISE EXCEPTION ''Historical task configuration is preserved''; END IF;','');
+definition:=replace(definition,'SELECT task_id,id,start_date,due_time,title,description,owner_id,creator_id,priority FROM public.task_revisions WHERE id=rid;','SELECT task_id,id,CASE WHEN _task_id IS NULL THEN start_date ELSE effective END,due_time,title,description,owner_id,creator_id,priority FROM public.task_revisions WHERE id=rid;');
+EXECUTE definition; END $$;
