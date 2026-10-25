@@ -162,6 +162,13 @@
       "when": 1792885623057,
       "tag": "0022_disable_explicit_access_recovery",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1792886590552,
+      "tag": "0023_invitation_delivery_and_explicit_regrant",
+      "breakpoints": true
     }
   ]
 }
