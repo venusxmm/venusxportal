@@ -1,5 +1,10 @@
 # V1 stabilization
 
+## Tasks targeted repair
+- [ ] Restore compact time blocks and persisted executive drag/touch movement.
+- [ ] Restore creator visibility and recurrence controls; add confirmed execution archival/bulk cleanup.
+- [ ] Verify security, recurrence, creation, rescheduling persistence and mobile flow; no deployment.
+
 ## Tasks overhaul
 - [x] Implement owner-only permissions and immutable dated recurrence executions.
 - [x] Replace Tasks presentation with mobile-first daily agenda, details, executive management and skip review.
