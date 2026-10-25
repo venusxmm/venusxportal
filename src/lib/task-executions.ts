@@ -98,3 +98,12 @@ export function formatTime12(time: string | null | undefined) {
   const [h = 0, m = 0] = time.split(":").map(Number);
   return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
 }
+/** Creator portal list: recurring work only up to today (Bogotá); future one-time tasks stay visible. */
+export function portalVisible<T extends { recurring: boolean; projected?: boolean; scheduled_date: string | null }>(
+  rows: T[],
+  today: string,
+): T[] {
+  return rows.filter(
+    (t) => !((t.recurring || t.projected) && !!t.scheduled_date && t.scheduled_date > today),
+  );
+}
