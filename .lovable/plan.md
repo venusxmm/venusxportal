@@ -78,3 +78,23 @@
 - Unit: owner/creator consistency, recurrence label, portal sort with "No time" last per date.
 - Browser as Executive: skip → Skipped label, neighbouring dates intact, Delete visible, Archive select-all count. The creator portal will be browser-checked only if a creator session is available; otherwise it is reported as not checked.
 - No publishing or deployment.
+
+## Addendum: task times and time blocks
+
+### What the data shows
+- The task settings store times exactly. For example, "Airbnb" is saved at 15:00 and several tasks at 16:00. No timezone shift was found in how the time is entered or stored.
+- The day's execution can still show a different time. Examples from today: "Raffaela" task 16:00 vs today 15:05, "Nicho de RF" 16:00 vs 15:10, "Preparación de Guía" 12:00 vs 18:00.
+- Root cause: editing a task applies **from tomorrow** to protect today's history, so today's card keeps the old or moved time. That looks like the time "did not save".
+- Time blocks are hard-coded today (Night 00–04 … Evening 18–24). No Edit Time Blocks control or saved block customization exists in the current code, so there is nothing to restore. Block management will be built new, with the current six blocks as defaults.
+
+### Changes
+- **Time edits:** when an Executive changes only the time (or other details) of a task with a pending execution today, the form asks: "Also update today's execution?" (default Yes). Yes updates only today's not-yet-completed execution and logs a "rescheduled" event. Completed and past executions are never changed. Recurrence still applies from tomorrow.
+- **One time format everywhere:** 12-hour display ("3:00 PM") in Daily Schedule, Board, List, Overdue, History, Manage, details and My Portal, from the same stored 24-hour Bogotá value.
+- **Automatic blocks:** the block is always computed from the execution's time against the configured boundaries. It is never stored on the task, so changing a time or a boundary regroups everywhere without touching dates, times, recurrence or history. Blocks that cross midnight (e.g. 22:00–02:00) are supported.
+- **Edit Time Blocks (Executives):** a small button on the Tasks page opens a dialog to rename blocks, change start/end times, add, remove and reset to defaults. Saving is blocked when blocks overlap, have no length or have the same name, so every time maps to exactly one block. Times that fall outside every block go into an "Unscheduled hours" group. Everyone sees the same blocks; only Executives can change them, and the database enforces it.
+
+### Technical details (addendum)
+- Migration 0030 adds `task_time_blocks` (id, label, start_time, end_time, position). It includes GRANTs and RLS: active members can read, only Executives can write. The six current blocks are inserted as defaults in the same migration.
+- `save_task_configuration` gets an optional `apply_today` flag that updates today's non-done, non-archived execution and writes a `rescheduled` event.
+- `src/lib/task-board.ts`: `blockForTime(time, blocks)` handles midnight wrap, `validateBlocks`, `formatTime12`. Blocks are loaded into the board, the Move dialog and drag targets.
+- Tests: 03:30 lands in Night. 22:00–02:00 matches 01:00 and 23:00. Overlapping blocks are rejected. The 15:00/16:00 round trip is checked. Editing the time with `apply_today` updates today only and leaves completed executions untouched. Non-executives cannot change blocks.
