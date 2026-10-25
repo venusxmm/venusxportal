@@ -12,6 +12,7 @@ import {
   GripVertical,
   ArrowRightLeft,
   Trash2,
+  Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -130,14 +131,49 @@ function Tasks() {
     queryKey: ["tasks", "people"],
     enabled: !!me?.isExec,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id,full_name,email")
-        .is("membership_removed_at", null)
-        .is("access_revoked_at", null);
-      if (error) throw error;
-      return data;
+      const [profiles, roles] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("id,full_name,email")
+          .is("membership_removed_at", null)
+          .is("access_revoked_at", null),
+        supabase.from("user_roles").select("user_id,role"),
+      ]);
+      if (profiles.error) throw profiles.error;
+      if (roles.error) throw roles.error;
+      return profiles.data.map((p) => ({
+        ...p,
+        roles: roles.data.filter((r) => r.user_id === p.id).map((r) => r.role as string),
+      }));
     },
+  });
+  const [deletingTask, setDeletingTask] = useState<Task | null>(null);
+  const stopSeries = useMutation({
+    mutationFn: async (t: Task) => {
+      const { error } = await supabase.rpc("save_task_configuration", {
+        _task_id: t.id,
+        _config: {
+          title: t.title,
+          description: t.description ?? "",
+          owner_id: t.owner_id ?? "",
+          creator_id: t.creator_id ?? "",
+          priority: t.priority,
+          due_date: t.due_date ?? agencyDate(),
+          due_time: t.due_time?.slice(0, 5) ?? "",
+          recurrence: t.recurrence,
+          weekdays: t.weekdays,
+          recurrence_state: "disabled",
+          visible_to_creator: t.visible_to_creator,
+        },
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      setDeletingTask(null);
+      toast.success("Task disabled; past executions and history kept");
+    },
+    onError: (e) => toast.error((e as Error).message),
   });
   const creators = useQuery({
     queryKey: ["tasks", "creators"],
@@ -369,6 +405,20 @@ function Tasks() {
           )}
         </div>
         <div className="mt-2 flex flex-wrap justify-end gap-2">
+          {me?.isExec && configurations.data?.some((c) => c.id === t.task_id) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label={`Edit ${t.title}`}
+              onClick={() => {
+                const c = configurations.data?.find((x) => x.id === t.task_id);
+                if (c) setEditing(c);
+              }}
+            >
+              <Pencil className="h-4 w-4" />
+              Edit
+            </Button>
+          )}
           {canMoveExecution(t, !!me?.isExec) && (
             <Button
               variant="ghost"
@@ -610,9 +660,21 @@ function Tasks() {
                     · {t.recurrence_state}
                   </p>
                 </div>
-                <Button variant="outline" className="min-h-11" onClick={() => setEditing(t)}>
-                  Edit
-                </Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" className="min-h-11" onClick={() => setEditing(t)}>
+                    <Pencil className="h-4 w-4" />
+                    Edit
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="min-h-11"
+                    aria-label={`Delete ${t.title}`}
+                    onClick={() => setDeletingTask(t)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete
+                  </Button>
+                </div>
               </article>
             ))}
         </div>
@@ -1001,11 +1063,12 @@ function ConfigurationDialog({
   onClose,
 }: {
   task: Task | null;
-  people: { id: string; full_name: string | null; email: string | null }[];
+  people: { id: string; full_name: string | null; email: string | null; roles: string[] }[];
   creators: { id: string; stage_name: string }[];
   onClose: () => void;
 }) {
   const qc = useQueryClient();
+  const [memberType, setMemberType] = useState("all");
   const [f, setF] = useState({
     title: task?.title ?? "",
     description: task?.description ?? "",
@@ -1074,6 +1137,15 @@ function ConfigurationDialog({
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1">
+              <Label>Member Type</Label>
+              <Filter
+                label="Member Type"
+                value={memberType}
+                onChange={setMemberType}
+                options={MEMBER_TYPES.map((value) => ({ value, label: titleCase(value) }))}
+              />
+            </div>
+            <div className="space-y-1">
               <Label>Owner</Label>
               <Filter
                 label="Task Owner"
@@ -1081,10 +1153,17 @@ function ConfigurationDialog({
                 onChange={(v) => setF({ ...f, owner_id: v === "none" ? "" : v })}
                 options={[
                   { value: "none", label: "Unassigned" },
-                  ...people.map((p) => ({
-                    value: p.id,
-                    label: p.full_name || p.email || "Member",
-                  })),
+                  ...people
+                    .filter(
+                      (p) =>
+                        memberType === "all" ||
+                        p.roles.includes(memberType) ||
+                        p.id === f.owner_id,
+                    )
+                    .map((p) => ({
+                      value: p.id,
+                      label: p.full_name || p.email || "Member",
+                    })),
                 ]}
               />
             </div>
@@ -1199,7 +1278,7 @@ function ConfigurationDialog({
               checked={f.visible_to_creator}
               onCheckedChange={(checked) => setF({ ...f, visible_to_creator: checked === true })}
             />
-            <Label htmlFor="creator-visible">Visible In Creator VenusOS</Label>
+            <Label htmlFor="creator-visible">Visible In Creator's Portal</Label>
           </div>
           {save.error && <ErrorNote error={save.error} />}
           <div className="flex justify-end gap-2">
