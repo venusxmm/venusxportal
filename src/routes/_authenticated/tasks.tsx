@@ -962,6 +962,13 @@ function ExecutionDetails({
     </Dialog>
   );
 }
+function eventBody(action: string, body: string) {
+  if (action !== "rescheduled") return body;
+  try {
+    const event = JSON.parse(body) as {from_date:string|null;from_time:string|null;to_date:string;to_time:string};
+    return `${event.from_date ?? "No Date"} ${event.from_time?.slice(0,5) ?? "No Time"} → ${event.to_date} ${event.to_time.slice(0,5)}`;
+  } catch { return body; }
+}
 function ConfigurationDialog({
   task,
   people,
