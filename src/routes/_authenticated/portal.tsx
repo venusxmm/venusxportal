@@ -59,6 +59,9 @@ function Portal() {
   const tasks = useQuery({
     enabled: !!cid,
     queryKey: ["tasks", "portal", cid],
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
     queryFn: async () => {
       const today = agencyDate();
       const { data, error } = await supabase.rpc("creator_portal_tasks", {
