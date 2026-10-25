@@ -1,5 +1,10 @@
 # V1 stabilization
 
+## Tasks overhaul
+- [ ] Implement owner-only permissions and immutable dated recurrence executions.
+- [ ] Replace Tasks presentation with mobile-first daily agenda, details, executive management and skip review.
+- [ ] Run focused permission/schedule/history tests and authenticated desktop/mobile checks; no deployment.
+
 ## Current targeted connection repair
 - [x] Trace invitation middleware environment failure and restore the existing runtime binding (managed key was stale; canonical bindings refreshed).
 - [x] Verify authenticated Team & Access backend reachability: missing Creator validation returned through the actual invitation server function; no email or record created.
