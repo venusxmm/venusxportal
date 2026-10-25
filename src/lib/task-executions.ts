@@ -86,6 +86,12 @@ export function ownerCreatorConsistent(
   if (t.visible_to_creator) return !!t.creator_id && creatorUserIds[t.creator_id] === t.owner_id;
   return true;
 }
+/** Creator-facing status label, using the same overdue rule as the Tasks views. */
+export function portalStatus(t: Execution, now = new Date()) {
+  if (t.status === "done") return "Completed";
+  if (t.status === "skipped") return "Skipped";
+  return executionOverdue(t, now) ? "Overdue" : "Pending";
+}
 /** 24h "15:00[:00]" to "3:00 PM". */
 export function formatTime12(time: string | null | undefined) {
   if (!time) return "No time";

@@ -10,6 +10,7 @@ import {
   agencyDate,
   executionOverdue,
   formatTime12,
+  portalStatus,
   recurrenceLabel,
   shiftDate,
   sortPortalTasks,
@@ -126,18 +127,15 @@ function Portal() {
           <p className={"mt-1 text-xs " + (late ? "text-destructive" : "text-muted-foreground")}>
             {t.scheduled_date ?? "No date"} · {formatTime12(t.due_time)}
             {t.recurring ? ` · ${recurrenceLabel(t.recurrence ?? "daily", t.weekdays ?? [])}` : ""}
-            {late ? " · Overdue" : ""}
-            {t.status === "skipped" ? " · Skipped" : ""}
-            {future ? " · Upcoming" : ""}
+            {" · "}
+            <span className={late ? "" : "text-gold"}>{portalStatus(t)}</span>
           </p>
-          {t.description && (
-            <details className="mt-1">
-              <summary className="cursor-pointer text-xs text-gold">View details</summary>
-              <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
-                {t.description}
-              </p>
-            </details>
-          )}
+          <details className="mt-1">
+            <summary className="cursor-pointer text-xs text-gold">View Details</summary>
+            <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
+              {t.description || "No description"}
+            </p>
+          </details>
         </div>
         <Button
           size="sm"
@@ -146,7 +144,7 @@ function Portal() {
           disabled={complete.isPending || future || t.projected || t.status === "skipped"}
           onClick={() => complete.mutate({ id: t.id, done: t.status !== "done" })}
         >
-          {t.status === "done" ? "Undo" : t.status === "skipped" ? "Skipped" : "Done"}
+          {t.status === "done" ? "Undo" : t.status === "skipped" ? "Skipped" : "Complete"}
         </Button>
       </div>
     );
