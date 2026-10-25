@@ -2,10 +2,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { TASK_STATUS_LABEL, useMe } from "@/lib/me";
+import { useMe } from "@/lib/me";
 import { money, summarize } from "@/lib/finance";
-import { EmptyState, Loading, PageHeader, Pill, Stat, isOverdue } from "@/components/portal";
+import { EmptyState, Loading, PageHeader, Pill, Stat } from "@/components/portal";
 import { Button } from "@/components/ui/button";
+import { agencyDate, executionOverdue, type Execution } from "@/lib/task-executions";
 import { Progress } from "@/components/ui/progress";
 
 export const Route = createFileRoute("/_authenticated/portal")({
@@ -20,49 +21,54 @@ function Portal() {
   const profile = useQuery({
     enabled: !!cid,
     queryKey: ["portal", "creator", cid],
-    queryFn: async () =>
-      (
+    queryFn: async () => {
+      if (!cid) return null;
+      return (
         await supabase
           .from("creators")
           .select("stage_name,status,positioning,objectives")
-          .eq("id", cid!)
+          .eq("id", cid)
           .single()
-      ).data,
+      ).data;
+    },
   });
   const tasks = useQuery({
     enabled: !!cid,
     queryKey: ["tasks", "portal", cid],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("tasks")
-        .select("id,title,description,status,due_date,priority")
-        .eq("creator_id", cid!)
-        .eq("visible_to_creator", true)
-        .is("archived_at", null)
-        .order("due_date");
+      const { data, error } = await supabase.rpc("task_agenda", { _date: agencyDate() });
       if (error) throw error;
-      return data;
+      return (data as unknown as Execution[]).filter(
+        (t) =>
+          !t.archived_at &&
+          !t.projected &&
+          (t.scheduled_date === agencyDate() || executionOverdue(t) || !t.scheduled_date),
+      );
     },
   });
   const fin = useQuery({
     enabled: !!cid,
     queryKey: ["transactions", "portal", cid],
-    queryFn: async () =>
-      (
-        await supabase
-          .from("transactions")
-          .select(
-            "kind,amount,currency,occurred_on,agency_share_pct,deduct_from_agency_cut,archived_at",
-          )
-          .eq("creator_id", cid!)
-          .eq("shared_with_creator", true)
-      ).data ?? [],
+    queryFn: async () => {
+      if (!cid) return [];
+      return (
+        (
+          await supabase
+            .from("transactions")
+            .select(
+              "kind,amount,currency,occurred_on,agency_share_pct,deduct_from_agency_cut,archived_at",
+            )
+            .eq("creator_id", cid)
+            .eq("shared_with_creator", true)
+        ).data ?? []
+      );
+    },
   });
   const complete = useMutation({
     mutationFn: async ({ id, done }: { id: string; done: boolean }) => {
-      const { error } = await supabase.rpc("creator_set_task_status", {
-        _task_id: id,
-        _status: done ? "done" : "todo",
+      const { error } = await supabase.rpc("task_execution_action", {
+        _id: id,
+        _action: done ? "complete" : "reopen",
       });
       if (error) throw error;
     },
@@ -122,13 +128,13 @@ function Portal() {
                 <p
                   className={
                     "mt-1 text-xs " +
-                    (isOverdue(t.due_date, t.status) ? "text-destructive" : "text-muted-foreground")
+                    (executionOverdue(t) ? "text-destructive" : "text-muted-foreground")
                   }
                 >
-                  {t.due_date ? `Due ${t.due_date}` : ""}
+                  {t.scheduled_date ? `Due ${t.scheduled_date}` : ""}
                 </p>
               </div>
-              <Pill value={t.status} label={TASK_STATUS_LABEL[t.status]} />
+              <Pill value={t.status} label={t.status.replaceAll("_", " ")} />
               <Button
                 size="sm"
                 variant={t.status === "done" ? "outline" : "default"}
