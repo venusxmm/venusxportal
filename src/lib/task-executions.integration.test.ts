@@ -79,7 +79,7 @@ beforeAll(async () => {
   await db.exec(
     readFileSync("drizzle/migrations/0029_task_occurrence_schedule_independence.sql", "utf8"),
   );
-  await db.exec(readFileSync(process.env.M30 ?? "drizzle/migrations/0031_task_portal_blocks_today_edits_apply.sql", "utf8"));
+  await db.exec(readFileSync("drizzle/migrations/0031_task_portal_blocks_today_edits_apply.sql", "utf8"));
 }, 30000);
 afterAll(async () => {
   await db.close();

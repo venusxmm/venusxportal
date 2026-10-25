@@ -997,7 +997,7 @@ function Filter({
   disabled?: boolean;
 }) {
   return (
-    <Select value={value} onValueChange={onChange} disabled={disabled}>
+    <Select value={value} onValueChange={onChange} disabled={!!disabled}>
       <SelectTrigger aria-label={label} className="h-11 min-w-0">
         <SelectValue />
       </SelectTrigger>
