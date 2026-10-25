@@ -42,3 +42,11 @@
 - [ ] Verify OnlyMonster documentation/access; preserve manual revenue entry.
 - [ ] Run automated tests, lint, real-session and mobile checks; inspect build signals.
 - [ ] Document Vercel requirements, exact blockers and deployment evidence.
+
+## Tasks: recurrence, portal, archive, times & blocks
+- [x] Per-date skip/delete, clear Skipped state, delete future single dates
+- [x] Owner/Linked Creator rules (UI + backend), portal range with recurrence labels
+- [x] Archive selection with reasons, select all
+- [x] Today's execution follows time edits; 12-hour display; configurable blocks
+- [ ] Creator-session browser check (no creator login available)
+- [ ] Decide on duplicate "Bloque #1 - Reddit" task (needs Executive choice)

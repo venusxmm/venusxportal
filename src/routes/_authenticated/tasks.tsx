@@ -23,6 +23,8 @@ import {
   shiftDate,
   executionOverdue,
   canExecute,
+  formatTime12,
+  ownerCreatorConsistent,
   type Execution,
 } from "@/lib/task-executions";
 import {
@@ -32,6 +34,8 @@ import {
   timeInBlock,
   canMoveExecution,
   titleCase,
+  validateBlocks,
+  type BoardBlock,
 } from "@/lib/task-board";
 import { Checkbox } from "@/components/ui/checkbox";
 import { EmptyState, ErrorNote, Loading, PageHeader, Pill } from "@/components/portal";
@@ -116,6 +120,27 @@ function Tasks() {
       return data as Execution[];
     },
   });
+  const blockRows = useQuery({
+    queryKey: ["tasks", "time-blocks"],
+    enabled: !!me,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("task_time_blocks")
+        .select("id,label,start_time,end_time,position")
+        .order("position");
+      if (error) throw error;
+      return data;
+    },
+  });
+  const blocks: BoardBlock[] = blockRows.data?.length
+    ? blockRows.data.map((b) => ({
+        id: b.id,
+        label: b.label,
+        start: b.start_time.slice(0, 5),
+        end: b.end_time.slice(0, 5) === "00:00" ? "24:00" : b.end_time.slice(0, 5),
+      }))
+    : BOARD_BLOCKS;
+  const [editingBlocks, setEditingBlocks] = useState(false);
   const configurations = useQuery({
     queryKey: ["tasks", "configurations"],
     enabled: !!me?.isExec,
@@ -182,12 +207,18 @@ function Tasks() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("creators")
-        .select("id,stage_name")
+        .select("id,stage_name,user_id")
         .is("archived_at", null);
       if (error) throw error;
       return data;
     },
   });
+  const creatorUsers: Record<string, string | null> = Object.fromEntries(
+    (creators.data ?? []).map((c) => [c.id, c.user_id]),
+  );
+  const creatorOwnerIds = new Set(
+    (creators.data ?? []).flatMap((c) => (c.user_id ? [c.user_id] : [])),
+  );
   const move = useMutation({
     mutationFn: async ({
       task,
@@ -219,6 +250,16 @@ function Tasks() {
   });
   const archive = useMutation({
     mutationFn: async (tasks: Execution[]) => {
+      const only = tasks[0];
+      if (tasks.length === 1 && only?.projected && only.scheduled_date) {
+        const { error } = await supabase.rpc("task_future_action", {
+          _task_id: only.task_id,
+          _date: only.scheduled_date,
+          _action: "archive",
+        });
+        if (error) throw error;
+        return;
+      }
       const { error } = await supabase.rpc("archive_task_executions", {
         _ids: tasks.map((t) => t.id),
         _confirm_count: tasks.length,
@@ -237,7 +278,7 @@ function Tasks() {
     onError: (error) => toast.error(error.message),
   });
   const dropTask = (blockId: string) => {
-    const block = BOARD_BLOCKS.find((b) => b.id === blockId);
+    const block = blocks.find((b) => b.id === blockId);
     if (dragging && block && canMoveExecution(dragging, !!me?.isExec)) {
       const time = timeInBlock(block, dragging, agenda.data ?? []);
       if (time) move.mutate({ task: dragging, time });
@@ -295,6 +336,13 @@ function Tasks() {
         (a.scheduled_date ?? "9999").localeCompare(b.scheduled_date ?? "9999") ||
         (a.due_time ?? "24:00").localeCompare(b.due_time ?? "24:00"),
     );
+  const deleteIneligible = (t: Execution) =>
+    t.archived_at
+      ? "Already deleted"
+      : t.status !== "done"
+        ? "Only completed executions can be bulk deleted"
+        : null;
+  const eligible = rows.filter((t) => !t.projected && !deleteIneligible(t));
   const active = rows.filter((t) => !["done", "skipped", "cancelled"].includes(t.status));
   const overdue = active.filter((t) => executionOverdue(t, now));
   const todayRows = active.filter((t) => t.scheduled_date === date);
@@ -341,14 +389,21 @@ function Tasks() {
           ) : (
             <span />
           )}
-          {me?.isExec && t.status === "done" && (
-            <Checkbox
-              aria-label={`Select ${t.title}`}
-              checked={selected.includes(t.id)}
-              onCheckedChange={(checked) =>
-                setSelected((ids) => (checked ? [...ids, t.id] : ids.filter((id) => id !== t.id)))
-              }
-            />
+          {me?.isExec && !t.projected && (["history", "archive"].includes(view) || status === "done") && (
+            <label
+              className="flex items-center gap-1 text-xs text-muted-foreground"
+              title={deleteIneligible(t) ?? "Select for deletion"}
+            >
+              {deleteIneligible(t) && <span className="hidden sm:inline">{deleteIneligible(t)}</span>}
+              <Checkbox
+                aria-label={`Select ${t.title}`}
+                disabled={!!deleteIneligible(t)}
+                checked={selected.includes(t.id)}
+                onCheckedChange={(checked) =>
+                  setSelected((ids) => (checked ? [...ids, t.id] : ids.filter((id) => id !== t.id)))
+                }
+              />
+            </label>
           )}
         </div>
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
@@ -357,7 +412,7 @@ function Tasks() {
               className={`mb-2 flex items-center gap-2 text-sm font-medium ${overdueState ? "text-destructive" : "text-gold"}`}
             >
               <Clock className="h-4 w-4 shrink-0" />
-              {t.due_time?.slice(0, 5) || "No time"}
+              {formatTime12(t.due_time)}
               {t.recurring && <Repeat2 className="h-4 w-4 shrink-0" aria-label="Recurring" />}
             </p>
             <h3
@@ -371,7 +426,17 @@ function Tasks() {
           </div>
           <Pill
             value={overdueState ? "overdue" : t.status}
-            label={overdueState ? "Overdue" : t.status === "todo" ? "Pending" : undefined}
+            label={
+              overdueState
+                ? "Overdue"
+                : t.status === "skipped"
+                  ? "Skipped"
+                  : t.skip_state === "pending"
+                    ? "Skip Requested"
+                    : t.status === "todo"
+                      ? "Pending"
+                      : undefined
+            }
           />
         </div>
         {t.skip_state === "pending" && (
@@ -431,7 +496,10 @@ function Tasks() {
               Move
             </Button>
           )}
-          {!t.projected && !t.archived_at && (me?.isExec || t.owner_id === me?.id) && (
+          {!t.archived_at &&
+            t.status !== "cancelled" &&
+            (!t.projected || (!!t.scheduled_date && t.scheduled_date > agencyDate(now))) &&
+            (me?.isExec || t.owner_id === me?.id) && (
             <Button variant="ghost" size="sm" onClick={() => setDeleting([t])}>
               <Trash2 className="h-4 w-4" />
               Delete Execution
@@ -467,10 +535,16 @@ function Tasks() {
         subtitle="America/Bogota · UTC−5"
         actions={
           me?.isExec && (
-            <Button className="min-h-11" onClick={() => setEditing("new")}>
-              <Plus className="h-4 w-4" />
-              New Task
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" className="min-h-11" onClick={() => setEditingBlocks(true)}>
+                <Clock className="h-4 w-4" />
+                Edit Time Blocks
+              </Button>
+              <Button className="min-h-11" onClick={() => setEditing("new")}>
+                <Plus className="h-4 w-4" />
+                New Task
+              </Button>
+            </div>
           )
         }
       />
@@ -612,21 +686,33 @@ function Tasks() {
         rows.some((t) => t.status === "done") && (
           <div className="flex flex-wrap gap-2">
             <Button
-              variant="outline"
+              variant="ghost"
               onClick={() =>
-                setDeleting(rows.filter((t) => t.status === "done" && selected.includes(t.id)))
+                setSelected(
+                  selected.length === eligible.length ? [] : eligible.map((t) => t.id),
+                )
               }
-              disabled={!rows.some((t) => t.status === "done" && selected.includes(t.id))}
+              disabled={!eligible.length}
             >
-              <Trash2 className="h-4 w-4" />
-              Delete Selected Completed
+              {selected.length > 0 && selected.length === eligible.length
+                ? "Clear Selection"
+                : `Select All (${eligible.length})`}
             </Button>
             <Button
               variant="outline"
-              onClick={() => setDeleting(rows.filter((t) => t.status === "done"))}
+              onClick={() => setDeleting(eligible.filter((t) => selected.includes(t.id)))}
+              disabled={!eligible.some((t) => selected.includes(t.id))}
             >
               <Trash2 className="h-4 w-4" />
-              Delete Filtered Completed ({rows.filter((t) => t.status === "done").length})
+              Delete Selected Completed ({eligible.filter((t) => selected.includes(t.id)).length})
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setDeleting(eligible)}
+              disabled={!eligible.length}
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete Filtered Completed ({eligible.length})
             </Button>
           </div>
         )}
@@ -660,7 +746,14 @@ function Tasks() {
                         ? "Every day"
                         : t.weekdays.map((d) => WEEKDAYS[d]).join(", ")}{" "}
                     · {t.recurrence_state}
+                    {t.due_time ? ` · ${formatTime12(t.due_time)}` : ""}
                   </p>
+                  {!ownerCreatorConsistent(t, creatorUsers, creatorOwnerIds) && (
+                    <p className="mt-1 text-xs text-warning">
+                      Needs Review · Owner and Linked Creator don't match, so it isn't shown in any
+                      Creator's Portal. Edit to fix.
+                    </p>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   <Button variant="outline" className="min-h-11" onClick={() => setEditing(t)}>
@@ -718,9 +811,11 @@ function Tasks() {
       ) : (
         <div className="space-y-7">
           <div className="grid min-w-0 gap-5 md:grid-cols-2 xl:grid-cols-3">
-            {BOARD_BLOCKS.map((block) => {
-              const blockRows = todayRows.filter((t) => blockForTime(t.due_time)?.id === block.id);
-              const current = date === agencyDate(now) && currentBlock(now)?.id === block.id;
+            {blocks.map((block) => {
+              const blockRows = todayRows.filter(
+                (t) => blockForTime(t.due_time, blocks)?.id === block.id,
+              );
+              const current = date === agencyDate(now) && currentBlock(now, blocks)?.id === block.id;
               return (
                 <section
                   key={block.id}
@@ -749,7 +844,7 @@ function Tasks() {
                         {current && <span className="ml-1 text-xs text-gold">Now</span>}
                       </h2>
                       <p className="text-xs text-muted-foreground">
-                        {block.start}–{block.end}
+                        {formatTime12(block.start)}–{formatTime12(block.end)}
                       </p>
                     </div>
                     <span className="text-sm text-muted-foreground">{blockRows.length}</span>
@@ -768,6 +863,11 @@ function Tasks() {
               );
             })}
           </div>
+          {todayRows.some((t) => t.due_time && !blockForTime(t.due_time, blocks)) &&
+            section(
+              "Unscheduled Hours",
+              todayRows.filter((t) => t.due_time && !blockForTime(t.due_time, blocks)),
+            )}
           {section(
             "No Time",
             todayRows.filter((t) => !t.due_time),
@@ -779,7 +879,7 @@ function Tasks() {
             )}
           <details className="border-t pt-4">
             <summary className="cursor-pointer text-sm font-medium">
-              Completed & cancelled · {completed.length}
+              Done & Skipped · {completed.length}
             </summary>
             <div className="mt-4 grid gap-3 lg:grid-cols-2">{completed.map(renderCard)}</div>
           </details>
@@ -803,11 +903,15 @@ function Tasks() {
       {moving && (
         <MoveDialog
           task={moving}
+          blocks={blocks}
           rows={agenda.data ?? []}
           pending={move.isPending}
           onClose={() => setMoving(null)}
           onSave={(time, targetDate) => move.mutate({ task: moving, time, targetDate })}
         />
+      )}
+      {editingBlocks && me?.isExec && (
+        <TimeBlocksDialog blocks={blocks} onClose={() => setEditingBlocks(false)} />
       )}
       {deletingTask && me?.isExec && (
         <Dialog open onOpenChange={(open) => !open && setDeletingTask(null)}>
@@ -884,14 +988,16 @@ function Filter({
   value,
   onChange,
   options,
+  disabled,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   options: { value: string; label: string }[];
+  disabled?: boolean;
 }) {
   return (
-    <Select value={value} onValueChange={onChange}>
+    <Select value={value} onValueChange={onChange} disabled={!!disabled}>
       <SelectTrigger aria-label={label} className="h-11 min-w-0">
         <SelectValue />
       </SelectTrigger>
@@ -959,7 +1065,7 @@ function ExecutionDetails({
         <DialogHeader>
           <DialogTitle className="break-words">{task.title}</DialogTitle>
           <DialogDescription>
-            {task.scheduled_date || "No date"} · {task.due_time?.slice(0, 5) || "No time"} ·
+            {task.scheduled_date || "No date"} · {formatTime12(task.due_time)} ·
             America/Bogota
           </DialogDescription>
         </DialogHeader>
@@ -1093,10 +1199,11 @@ function ConfigurationDialog({
 }: {
   task: Task | null;
   people: { id: string; full_name: string | null; email: string | null; roles: string[] }[];
-  creators: { id: string; stage_name: string }[];
+  creators: { id: string; stage_name: string; user_id: string | null }[];
   onClose: () => void;
 }) {
   const qc = useQueryClient();
+  const [applyToday, setApplyToday] = useState(true);
   const [memberType, setMemberType] = useState("all");
   const [f, setF] = useState({
     title: task?.title ?? "",
@@ -1115,7 +1222,7 @@ function ConfigurationDialog({
     mutationFn: async () => {
       const { error } = await supabase.rpc("save_task_configuration", {
         _task_id: task?.id ?? "00000000-0000-0000-0000-000000000000",
-        _config: f,
+        _config: { ...f, apply_today: !!task && applyToday },
       });
       if (error) throw error;
     },
@@ -1128,6 +1235,17 @@ function ConfigurationDialog({
   });
   const field = (name: "title" | "description" | "due_date" | "due_time", value: string) =>
     setF((current) => ({ ...current, [name]: value }));
+  const ownerCreator = creators.find((c) => !!c.user_id && c.user_id === f.owner_id);
+  const canPublish = !!ownerCreator && f.creator_id === ownerCreator.id;
+  const setOwner = (id: string) => {
+    const linked = creators.find((c) => !!c.user_id && c.user_id === id);
+    setF((cur) => ({
+      ...cur,
+      owner_id: id,
+      creator_id: linked ? linked.id : cur.creator_id,
+      visible_to_creator: linked ? cur.visible_to_creator : false,
+    }));
+  };
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[90dvh] overflow-y-auto">
@@ -1179,7 +1297,7 @@ function ConfigurationDialog({
               <Filter
                 label="Task Owner"
                 value={f.owner_id || "none"}
-                onChange={(v) => setF({ ...f, owner_id: v === "none" ? "" : v })}
+                onChange={(v) => setOwner(v === "none" ? "" : v)}
                 options={[
                   { value: "none", label: "Unassigned" },
                   ...people
@@ -1287,6 +1405,7 @@ function ConfigurationDialog({
             <Filter
               label="Linked Creator"
               value={f.creator_id || "none"}
+              disabled={!!ownerCreator}
               onChange={(v) =>
                 setF({
                   ...f,
@@ -1303,12 +1422,33 @@ function ConfigurationDialog({
           <div className="flex min-h-11 items-center gap-3">
             <Checkbox
               id="creator-visible"
-              disabled={!f.creator_id}
+              disabled={!canPublish && !f.visible_to_creator}
               checked={f.visible_to_creator}
               onCheckedChange={(checked) => setF({ ...f, visible_to_creator: checked === true })}
             />
             <Label htmlFor="creator-visible">Visible In Creator's Portal</Label>
           </div>
+          <p className="text-xs text-muted-foreground">
+            {ownerCreator
+              ? "The owner is a creator, so Linked Creator follows the owner. Publishing stays a separate choice."
+              : "Only tasks owned by a creator can appear in that creator's portal. Linked Creator is just a reference here."}
+          </p>
+          {f.visible_to_creator && !canPublish && (
+            <p className="text-sm text-warning">
+              This task is published but its owner isn't the linked creator. Set the owner to the
+              creator or turn off portal visibility before saving.
+            </p>
+          )}
+          {task && f.recurrence_state === "enabled" && (
+            <div className="flex min-h-11 items-center gap-3">
+              <Checkbox
+                id="apply-today"
+                checked={applyToday}
+                onCheckedChange={(checked) => setApplyToday(checked === true)}
+              />
+              <Label htmlFor="apply-today">Also Update Today's Pending Execution</Label>
+            </div>
+          )}
           {save.error && <ErrorNote error={save.error} />}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={onClose}>
@@ -1328,12 +1468,14 @@ function ConfigurationDialog({
 
 function MoveDialog({
   task,
+  blocks,
   rows,
   pending,
   onClose,
   onSave,
 }: {
   task: Execution;
+  blocks: BoardBlock[];
   rows: Execution[];
   pending: boolean;
   onClose: () => void;
@@ -1352,18 +1494,18 @@ function MoveDialog({
           <Label>Move To Time Block</Label>
           <Filter
             label="Move To Time Block"
-            value={blockForTime(time)?.id ?? "morning"}
+            value={blockForTime(time, blocks)?.id ?? blocks[0]?.id ?? ""}
             onChange={(id) => {
-              const block = BOARD_BLOCKS.find((b) => b.id === id);
+              const block = blocks.find((b) => b.id === id);
               if (block) {
                 const next = timeInBlock(block, { ...task, scheduled_date: date }, rows);
                 if (next) setTime(next);
                 else toast.error("This block is full. Choose a time.");
               }
             }}
-            options={BOARD_BLOCKS.map((b) => ({
+            options={blocks.map((b) => ({
               value: b.id,
-              label: `${b.label} · ${b.start}–${b.end}`,
+              label: `${b.label} · ${formatTime12(b.start)}–${formatTime12(b.end)}`,
             }))}
           />
           <Label htmlFor="move-date">Date</Label>
@@ -1388,6 +1530,111 @@ function MoveDialog({
             </Button>
             <Button disabled={pending || !date || !time} onClick={() => onSave(time, date)}>
               Save Schedule
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function TimeBlocksDialog({ blocks, onClose }: { blocks: BoardBlock[]; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [draft, setDraft] = useState<BoardBlock[]>(blocks.map((b) => ({ ...b })));
+  const error = validateBlocks(draft);
+  const save = useMutation({
+    mutationFn: async (next: BoardBlock[]) => {
+      const { data: existing, error: readError } = await supabase
+        .from("task_time_blocks")
+        .select("id");
+      if (readError) throw readError;
+      const rows = next.map((b, position) => ({
+        label: b.label.trim(),
+        start_time: b.start,
+        end_time: b.end === "24:00" ? "00:00" : b.end,
+        position,
+      }));
+      const { error: insertError } = await supabase.from("task_time_blocks").insert(rows);
+      if (insertError) throw insertError;
+      const old = (existing ?? []).map((r) => r.id);
+      if (old.length) {
+        const { error: deleteError } = await supabase
+          .from("task_time_blocks")
+          .delete()
+          .in("id", old);
+        if (deleteError) throw deleteError;
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tasks", "time-blocks"] });
+      toast.success("Time blocks saved; task times unchanged");
+      onClose();
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+  const set = (i: number, patch: Partial<BoardBlock>) =>
+    setDraft((d) => d.map((b, j) => (j === i ? { ...b, ...patch } : b)));
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Edit Time Blocks</DialogTitle>
+          <DialogDescription>
+            Tasks group automatically by their time. Blocks may cross midnight but must not
+            overlap. Task dates and times never change.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          {draft.map((b, i) => (
+            <div key={b.id} className="grid grid-cols-[minmax(0,1fr)_6.5rem_6.5rem_auto] gap-2">
+              <Input
+                aria-label="Block name"
+                value={b.label}
+                maxLength={40}
+                onChange={(e) => set(i, { label: e.target.value })}
+              />
+              <Input
+                aria-label={`${b.label} start`}
+                type="time"
+                value={b.start}
+                onChange={(e) => set(i, { start: e.target.value })}
+              />
+              <Input
+                aria-label={`${b.label} end`}
+                type="time"
+                value={b.end === "24:00" ? "00:00" : b.end}
+                onChange={(e) => set(i, { end: e.target.value === "00:00" ? "24:00" : e.target.value })}
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={`Remove ${b.label}`}
+                onClick={() => setDraft((d) => d.filter((_, j) => j !== i))}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <div className="flex flex-wrap justify-between gap-2">
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() =>
+                  setDraft((d) => [
+                    ...d,
+                    { id: `new-${Date.now()}`, label: "New Block", start: "12:00", end: "13:00" },
+                  ])
+                }
+              >
+                Add Block
+              </Button>
+              <Button variant="ghost" onClick={() => setDraft(BOARD_BLOCKS.map((b) => ({ ...b })))}>
+                Reset Defaults
+              </Button>
+            </div>
+            <Button disabled={!!error || !draft.length || save.isPending} onClick={() => save.mutate(draft)}>
+              Save Blocks
             </Button>
           </div>
         </div>

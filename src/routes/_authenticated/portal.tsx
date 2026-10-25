@@ -9,6 +9,9 @@ import { Button } from "@/components/ui/button";
 import {
   agencyDate,
   executionOverdue,
+  formatTime12,
+  recurrenceLabel,
+  shiftDate,
   sortPortalTasks,
   type Execution,
 } from "@/lib/task-executions";
@@ -56,14 +59,13 @@ function Portal() {
     enabled: !!cid,
     queryKey: ["tasks", "portal", cid],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("task_agenda", { _date: agencyDate() });
+      const today = agencyDate();
+      const { data, error } = await supabase.rpc("creator_portal_tasks", {
+        _from: shiftDate(today, -7),
+        _to: shiftDate(today, 14),
+      });
       if (error) throw error;
-      return (data as unknown as Execution[]).filter(
-        (t) =>
-          !t.archived_at &&
-          !t.projected &&
-          (t.scheduled_date === agencyDate() || executionOverdue(t) || !t.scheduled_date),
-      );
+      return data as unknown as (Execution & { recurrence?: string; weekdays?: number[] })[];
     },
   });
   const fin = useQuery({
@@ -107,12 +109,14 @@ function Portal() {
   const ts = sortPortalTasks(
     (tasks.data ?? []).filter((t) => t.visible_to_creator && t.owner_id === me.id),
   );
-  const pending = ts.filter((t) => t.status !== "done");
-  const completed = ts.filter((t) => t.status === "done");
+  const today = agencyDate();
+  const pending = ts.filter((t) => !["done", "skipped"].includes(t.status));
+  const completed = ts.filter((t) => ["done", "skipped"].includes(t.status));
   const pct = ts.length ? Math.round((completed.length / ts.length) * 100) : 0;
   const s = summarize(fin.data ?? []);
-  const card = (t: Execution) => {
+  const card = (t: Execution & { recurrence?: string; weekdays?: number[] }) => {
     const late = executionOverdue(t);
+    const future = !!t.scheduled_date && t.scheduled_date > today;
     return (
       <div key={t.id} className="flex items-start gap-3 rounded-lg border bg-card p-4">
         <div className="min-w-0 flex-1">
@@ -120,8 +124,11 @@ function Portal() {
             {t.title}
           </p>
           <p className={"mt-1 text-xs " + (late ? "text-destructive" : "text-muted-foreground")}>
-            {t.scheduled_date ?? "No date"} · {t.due_time?.slice(0, 5) ?? "No time"}
+            {t.scheduled_date ?? "No date"} · {formatTime12(t.due_time)}
+            {t.recurring ? ` · ${recurrenceLabel(t.recurrence ?? "daily", t.weekdays ?? [])}` : ""}
             {late ? " · Overdue" : ""}
+            {t.status === "skipped" ? " · Skipped" : ""}
+            {future ? " · Upcoming" : ""}
           </p>
           {t.description && (
             <details className="mt-1">
@@ -136,10 +143,10 @@ function Portal() {
           size="sm"
           className="min-h-11"
           variant={t.status === "done" ? "outline" : "default"}
-          disabled={complete.isPending}
+          disabled={complete.isPending || future || t.projected || t.status === "skipped"}
           onClick={() => complete.mutate({ id: t.id, done: t.status !== "done" })}
         >
-          {t.status === "done" ? "Undo" : "Done"}
+          {t.status === "done" ? "Undo" : t.status === "skipped" ? "Skipped" : "Done"}
         </Button>
       </div>
     );

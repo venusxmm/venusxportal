@@ -510,6 +510,33 @@ export type Database = {
           },
         ]
       }
+      task_time_blocks: {
+        Row: {
+          created_at: string
+          end_time: string
+          id: string
+          label: string
+          position: number
+          start_time: string
+        }
+        Insert: {
+          created_at?: string
+          end_time: string
+          id?: string
+          label: string
+          position?: number
+          start_time: string
+        }
+        Update: {
+          created_at?: string
+          end_time?: string
+          id?: string
+          label?: string
+          position?: number
+          start_time?: string
+        }
+        Relationships: []
+      }
       tasks: {
         Row: {
           archived_at: string | null
@@ -738,6 +765,10 @@ export type Database = {
           _token_hash: string
           _user_id: string
         }
+        Returns: Json
+      }
+      creator_portal_tasks: {
+        Args: { _from: string; _to: string }
         Returns: Json
       }
       creator_set_task_status: {

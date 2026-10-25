@@ -14,6 +14,7 @@ let db: PGlite;
 const exec = "00000000-0000-0000-0000-000000000001";
 const owner = "00000000-0000-0000-0000-000000000002";
 const other = "00000000-0000-0000-0000-000000000003";
+const creatorUser = "00000000-0000-0000-0000-000000000005";
 async function as(user: string, sql: string, args: unknown[] = []) {
   await db.exec(
     `begin; select set_config('request.jwt.claim.sub','${user}',true); set local role authenticated`,
@@ -57,9 +58,9 @@ beforeAll(async () => {
  create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
  create type public.task_priority as enum('low','medium','high','critical'); create type public.task_status as enum('todo','in_progress','blocked','review','done');
  create table public.tasks(id uuid primary key default gen_random_uuid(),title text not null,description text,owner_id uuid,creator_id uuid,visible_to_creator boolean not null default false,priority task_priority default 'medium',status task_status default 'todo',due_date date,due_time time,created_by uuid,created_at timestamptz default now(),completed_at timestamptz,archived_at timestamptz);
- create table creators(id uuid primary key,archived_at timestamptz);
- create function is_own_creator(uuid) returns boolean language sql stable as $$select $1=auth.uid()$$;
- insert into creators(id) values('${other}');
+ create table creators(id uuid primary key,archived_at timestamptz,user_id uuid);
+ create function is_own_creator(uuid) returns boolean language sql stable as $$select exists(select 1 from creators where id=$1 and user_id=auth.uid())$$;
+ insert into creators(id,user_id) values('${other}','${creatorUser}');
  create table task_comments(id uuid default gen_random_uuid(),task_id uuid,author_id uuid,body text,created_at timestamptz default now());
  grant usage on schema public,auth to authenticated; grant select,insert,update,delete on tasks,task_comments to authenticated;
  alter table tasks enable row level security; alter table task_comments enable row level security;
@@ -78,11 +79,83 @@ beforeAll(async () => {
   await db.exec(
     readFileSync("drizzle/migrations/0029_task_occurrence_schedule_independence.sql", "utf8"),
   );
+  await db.exec(readFileSync("drizzle/migrations/0031_task_portal_blocks_today_edits_apply.sql", "utf8"));
 }, 30000);
 afterAll(async () => {
   await db.close();
 });
 describe("execution security and recurrence SQL", () => {
+  it("skipping one date leaves neighbouring dates and the rule intact", async () => {
+    const tid = await create({ due_date: "2026-10-25" });
+    const eid = (
+      await as(owner, "select task_future_action($1,'2026-10-26','request_skip') as id", [tid])
+    ).rows[0] as { id: string };
+    await as(exec, "select task_execution_action($1,'approve_skip')", [eid.id]);
+    for (const d of ["2026-10-27", "2026-10-28"]) {
+      const a = await as(owner, `select task_agenda('${d}') as agenda`);
+      const mine = (a.rows[0] as { agenda: { task_id: string; scheduled_date: string; status: string }[] }).agenda.filter(
+        (e) => e.task_id === tid && e.scheduled_date === d,
+      );
+      expect(mine).toEqual([expect.objectContaining({ status: "todo" })]);
+    }
+    const skipped = await as(owner, "select task_agenda('2026-10-26') as agenda");
+    expect(
+      (skipped.rows[0] as { agenda: { task_id: string; status: string; scheduled_date: string }[] }).agenda.filter(
+        (e) => e.task_id === tid && e.scheduled_date === "2026-10-26",
+      ),
+    ).toEqual([expect.objectContaining({ status: "skipped" })]);
+    expect((await db.query("select recurrence_state from tasks where id=$1", [tid])).rows).toEqual([
+      { recurrence_state: "enabled" },
+    ]);
+  });
+  it("deleting one future date leaves the next date", async () => {
+    const tid = await create({});
+    await as(owner, "select task_future_action($1,'2026-10-29','archive')", [tid]);
+    const gone = await as(owner, "select task_agenda('2026-10-29') as agenda");
+    const next = await as(owner, "select task_agenda('2026-10-30') as agenda");
+    const has = (r: typeof gone, d: string) =>
+      (r.rows[0] as { agenda: { task_id: string; scheduled_date: string }[] }).agenda.some(
+        (e) => e.task_id === tid && e.scheduled_date === d,
+      );
+    expect(has(gone, "2026-10-29")).toBe(false);
+    expect(has(next, "2026-10-30")).toBe(true);
+  });
+  it("rejects publishing when the owner is not the linked creator", async () => {
+    await expect(create({ creator_id: other, visible_to_creator: true })).rejects.toThrow(
+      "Portal publishing requires",
+    );
+    await expect(create({ owner_id: creatorUser, creator_id: null })).rejects.toThrow(
+      "creator owner must be the linked creator",
+    );
+  });
+  it("creator portal range returns only own published future dates", async () => {
+    const pub = await create({ owner_id: creatorUser, creator_id: other, visible_to_creator: true });
+    const priv = await create({ owner_id: creatorUser, creator_id: other });
+    const r = await as(creatorUser, "select creator_portal_tasks('2026-10-25','2026-10-28') as t");
+    const rows = (r.rows[0] as { t: { task_id: string; scheduled_date: string; recurrence: string }[] }).t;
+    expect(rows.some((e) => e.task_id === pub && e.scheduled_date === "2026-10-27" && e.recurrence === "daily")).toBe(true);
+    expect(rows.some((e) => e.task_id === priv)).toBe(false);
+    const o = await as(owner, "select creator_portal_tasks('2026-10-25','2026-10-28') as t");
+    expect((o.rows[0] as { t: unknown[] }).t).toEqual([]);
+  });
+  it("apply_today updates only today's open execution", async () => {
+    const tid = await create({ recurrence: "once", due_time: "10:00" });
+    await as(exec, "select save_task_configuration($1,$2::jsonb)", [
+      tid,
+      JSON.stringify({ title: "Isolated QA", owner_id: owner, recurrence: "once", due_date: "2026-10-25", due_time: "15:00", apply_today: true }),
+    ]);
+    const rows = await db.query(
+      "select scheduled_date::text,due_time::text from task_executions where task_id=$1 and status<>'cancelled'",
+      [tid],
+    );
+    expect(rows.rows).toEqual([{ scheduled_date: "2026-10-25", due_time: "15:00:00" }]);
+  });
+  it("only executives change time blocks", async () => {
+    await expect(
+      as(owner, "insert into task_time_blocks(label,start_time,end_time) values('X','01:00','02:00')"),
+    ).rejects.toThrow();
+    expect((await as(owner, "select count(*)::int n from task_time_blocks")).rows).toEqual([{ n: 6 }]);
+  });
   it("moving one recurrence date does not suppress either original occurrence", async () => {
     const tid = await create({});
     await as(exec, "select move_task_execution(null,$1,'2026-10-26','20:15','2026-10-27')", [tid]);
@@ -318,19 +391,20 @@ describe("execution security and recurrence SQL", () => {
   });
   it("linking alone never publishes, explicit publication grants only creator access", async () => {
     const privateId = await create({ recurrence: "once", creator_id: other });
-    expect((await as(other, "select id from tasks where id=$1", [privateId])).rows).toHaveLength(0);
+    expect((await as(creatorUser, "select id from tasks where id=$1", [privateId])).rows).toHaveLength(0);
     const published = await create({
       recurrence: "once",
       creator_id: other,
+      owner_id: creatorUser,
       visible_to_creator: true,
     });
     const eid = await execution(published, "2026-10-25");
     expect(
-      (await as(other, "select id from task_executions where id=$1", [eid])).rows,
+      (await as(creatorUser, "select id from task_executions where id=$1", [eid])).rows,
     ).toHaveLength(1);
-    await as(other, "select task_execution_action($1,'complete')", [eid]);
+    await as(creatorUser, "select task_execution_action($1,'complete')", [eid]);
     await expect(
-      as(other, "select save_task_configuration($1,$2::jsonb)", [
+      as(creatorUser, "select save_task_configuration($1,$2::jsonb)", [
         published,
         JSON.stringify({ title: "Hack" }),
       ]),
