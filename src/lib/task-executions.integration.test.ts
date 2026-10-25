@@ -75,11 +75,21 @@ beforeAll(async () => {
   await db.exec(
     readFileSync("drizzle/migrations/0028_task_move_projected_input_guard.sql", "utf8"),
   );
+  await db.exec(readFileSync("drizzle/migrations/0029_task_occurrence_schedule_independence.sql", "utf8"));
 }, 30000);
 afterAll(async () => {
   await db.close();
 });
 describe("execution security and recurrence SQL", () => {
+  it("moving one recurrence date does not suppress either original occurrence", async () => {
+    const tid = await create({});
+    await as(exec,"select move_task_execution(null,$1,'2026-10-26','20:15','2026-10-27')",[tid]);
+    await as(exec,"select move_task_execution(null,$1,'2026-10-27','21:15')",[tid]);
+    const rows = await db.query("select occurrence_date::text,scheduled_date::text from task_executions where task_id=$1 and scheduled_date='2026-10-27' order by occurrence_date",[tid]);
+    expect(rows.rows).toEqual([{occurrence_date:"2026-10-26",scheduled_date:"2026-10-27"},{occurrence_date:"2026-10-27",scheduled_date:"2026-10-27"}]);
+    const agenda=await as(owner,"select task_agenda('2026-10-26') as agenda");
+    expect((agenda.rows[0] as {agenda:{task_id:string,scheduled_date:string}[]}).agenda.some(e=>e.task_id===tid && e.scheduled_date==='2026-10-26')).toBe(false);
+  });
   it("preserves existing tasks and backs up execution snapshots", async () => {
     const r = await db.query(
       `select e.title,e.scheduled_date::text from task_executions e join tasks t on t.id=e.task_id where t.title='Existing preserved'`,
