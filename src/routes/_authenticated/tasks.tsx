@@ -104,7 +104,7 @@ function Tasks() {
   });
   const history = useQuery({
     queryKey: ["tasks", "history", me?.id],
-    enabled: !!me && view === "history",
+    enabled: !!me && ["history", "archive"].includes(view),
     queryFn: async () => {
       const { data, error } = await supabase
         .from("task_executions")
@@ -240,7 +240,7 @@ function Tasks() {
     },
     onError: (error) => toast.error(error.message),
   });
-  const rows = (view === "history" ? (history.data ?? []) : (agenda.data ?? []))
+  const rows = (["history", "archive"].includes(view) ? (history.data ?? []) : (agenda.data ?? []))
     .filter(
       (t) =>
         (view === "archive" ? !!t.archived_at : !t.archived_at) &&
@@ -480,6 +480,9 @@ function Tasks() {
           <TabsTrigger className="min-h-11" value="history">
             History
           </TabsTrigger>
+          <TabsTrigger className="min-h-11" value="archive">
+            Archive
+          </TabsTrigger>
           {me?.isExec && (
             <TabsTrigger className="min-h-11" value="manage">
               Manage
@@ -553,7 +556,7 @@ function Tasks() {
         </div>
       </details>
       {me?.isExec &&
-        (view === "history" || view === "board" || status === "done") &&
+        (["history", "archive"].includes(view) || view === "board" || status === "done") &&
         rows.some((t) => t.status === "done") && (
           <div className="flex flex-wrap gap-2">
             <Button
@@ -615,7 +618,7 @@ function Tasks() {
         </div>
       ) : view === "overdue" ? (
         section("Overdue · Original Dates", overdue)
-      ) : view === "history" ? (
+      ) : ["history", "archive"].includes(view) ? (
         <div className="space-y-4">
           {history.error && <ErrorNote error={history.error} />}
           {history.isLoading ? (
@@ -724,6 +727,7 @@ function Tasks() {
           executive={!!me?.isExec}
           allowed={
             !!me &&
+            !currentDetails.archived_at &&
             currentDetails.status !== "cancelled" &&
             (me.isExec || currentDetails.owner_id === me.id || !!currentDetails.visible_to_creator)
           }

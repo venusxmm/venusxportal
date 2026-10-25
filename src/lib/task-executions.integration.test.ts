@@ -69,7 +69,12 @@ beforeAll(async () => {
   await db.exec(migration);
   await db.exec(guards);
   await db.exec(readFileSync("drizzle/migrations/0026_task_future_revision_editing.sql", "utf8"));
-  await db.exec(readFileSync("drizzle/migrations/0027_task_board_movement_publication_archive.sql", "utf8"));
+  await db.exec(
+    readFileSync("drizzle/migrations/0027_task_board_movement_publication_archive.sql", "utf8"),
+  );
+  await db.exec(
+    readFileSync("drizzle/migrations/0028_task_move_projected_input_guard.sql", "utf8"),
+  );
 }, 30000);
 afterAll(async () => {
   await db.close();
@@ -290,59 +295,145 @@ describe("execution security and recurrence SQL", () => {
     ]);
   });
   it("linking alone never publishes, explicit publication grants only creator access", async () => {
-    const privateId = await create({recurrence:"once", creator_id:other});
-    expect((await as(other,"select id from tasks where id=$1",[privateId])).rows).toHaveLength(0);
-    const published = await create({recurrence:"once", creator_id:other,visible_to_creator:true});
-    const eid = await execution(published,"2026-10-25");
-    expect((await as(other,"select id from task_executions where id=$1",[eid])).rows).toHaveLength(1);
-    await as(other,"select task_execution_action($1,'complete')",[eid]);
-    await expect(as(other,"select save_task_configuration($1,$2::jsonb)",[published,JSON.stringify({title:"Hack"})])).rejects.toThrow("Executive required");
-    await expect(create({visible_to_creator:true,creator_id:null})).rejects.toThrow("Select a linked creator");
+    const privateId = await create({ recurrence: "once", creator_id: other });
+    expect((await as(other, "select id from tasks where id=$1", [privateId])).rows).toHaveLength(0);
+    const published = await create({
+      recurrence: "once",
+      creator_id: other,
+      visible_to_creator: true,
+    });
+    const eid = await execution(published, "2026-10-25");
+    expect(
+      (await as(other, "select id from task_executions where id=$1", [eid])).rows,
+    ).toHaveLength(1);
+    await as(other, "select task_execution_action($1,'complete')", [eid]);
+    await expect(
+      as(other, "select save_task_configuration($1,$2::jsonb)", [
+        published,
+        JSON.stringify({ title: "Hack" }),
+      ]),
+    ).rejects.toThrow("Executive required");
+    await expect(create({ visible_to_creator: true, creator_id: null })).rejects.toThrow(
+      "Select a linked creator",
+    );
   });
   it("reschedules one execution retaining date, snapshot, and recurrence", async () => {
-    const tid=await create({});
-    const result=await as(exec,"select move_task_execution(null,$1,'2026-10-26','15:05') as id",[tid]);
-    const eid=(result.rows[0] as {id:string}).id;
-    await as(exec,"select move_task_execution($1,$2,'2026-10-26','18:05')",[eid,tid]);
-    expect((await db.query("select scheduled_date::text,occurrence_date::text,due_time::text,description from task_executions where id=$1",[eid])).rows).toEqual([{scheduled_date:"2026-10-26",occurrence_date:"2026-10-26",due_time:"18:05:00",description:"Original"}]);
-    await as(owner,"select task_agenda('2026-10-26')");
-    expect((await db.query("select count(*)::int as n from task_executions where task_id=$1 and occurrence_date='2026-10-26'",[tid])).rows).toEqual([{n:1}]);
-    expect((await db.query("select due_time::text from task_revisions where task_id=$1",[tid])).rows).toEqual([{due_time:"09:00:00"}]);
-    expect((await db.query("select action from task_execution_events where execution_id=$1",[eid])).rows).toEqual([{action:"rescheduled"},{action:"rescheduled"}]);
-    await expect(as(owner,"select move_task_execution($1,$2,'2026-10-26','19:00')",[eid,tid])).rejects.toThrow("Executive required");
+    const tid = await create({});
+    const result = await as(
+      exec,
+      "select move_task_execution('00000000-0000-0000-0000-000000000000',$1,'2026-10-26','15:05') as id",
+      [tid],
+    );
+    const eid = (result.rows[0] as { id: string }).id;
+    await as(exec, "select move_task_execution($1,$2,'2026-10-26','18:05')", [eid, tid]);
+    expect(
+      (
+        await db.query(
+          "select scheduled_date::text,occurrence_date::text,due_time::text,description from task_executions where id=$1",
+          [eid],
+        )
+      ).rows,
+    ).toEqual([
+      {
+        scheduled_date: "2026-10-26",
+        occurrence_date: "2026-10-26",
+        due_time: "18:05:00",
+        description: "Original",
+      },
+    ]);
+    await as(owner, "select task_agenda('2026-10-26')");
+    expect(
+      (
+        await db.query(
+          "select count(*)::int as n from task_executions where task_id=$1 and occurrence_date='2026-10-26'",
+          [tid],
+        )
+      ).rows,
+    ).toEqual([{ n: 1 }]);
+    expect(
+      (await db.query("select due_time::text from task_revisions where task_id=$1", [tid])).rows,
+    ).toEqual([{ due_time: "09:00:00" }]);
+    expect(
+      (await db.query("select action from task_execution_events where execution_id=$1", [eid]))
+        .rows,
+    ).toEqual([{ action: "rescheduled" }, { action: "rescheduled" }]);
+    await expect(
+      as(owner, "select move_task_execution($1,$2,'2026-10-26','19:00')", [eid, tid]),
+    ).rejects.toThrow("Executive required");
   });
   it("blocks collisions and completed execution moves", async () => {
-    const a=await create({recurrence:"once",due_time:"23:01"});
-    const b=await create({recurrence:"once",due_time:"23:02"});
-    const eid=await execution(b,"2026-10-25");
-    await expect(as(exec,"select move_task_execution($1,$2,'2026-10-25','23:01')",[eid,b])).rejects.toThrow("Time already occupied");
-    await as(owner,"select task_execution_action($1,'complete')",[eid]);
-    await expect(as(exec,"select move_task_execution($1,$2,'2026-10-25','22:00')",[eid,b])).rejects.toThrow("Execution cannot be moved");
+    const a = await create({ recurrence: "once", due_time: "23:01" });
+    const b = await create({ recurrence: "once", due_time: "23:02" });
+    const eid = await execution(b, "2026-10-25");
+    await expect(
+      as(exec, "select move_task_execution($1,$2,'2026-10-25','23:01')", [eid, b]),
+    ).rejects.toThrow("Time already occupied");
+    await as(owner, "select task_execution_action($1,'complete')", [eid]);
+    await expect(
+      as(exec, "select move_task_execution($1,$2,'2026-10-25','22:00')", [eid, b]),
+    ).rejects.toThrow("Execution cannot be moved");
     expect(a).not.toBe(b);
   });
   it("requires exact confirmation and archives completed executions without deleting history or recurrence", async () => {
-    const a=await create({}), b=await create({});
-    await as(owner,"select task_agenda('2026-10-25')");
-    const ea=await execution(a,"2026-10-25"), eb=await execution(b,"2026-10-25");
-    await as(owner,"select task_execution_action($1,'comment','Keep history')",[ea]);
-    await as(owner,"select task_execution_action($1,'complete')",[ea]);
-    await expect(as(exec,"select archive_task_executions($1,1,true)",[[ea,eb]])).rejects.toThrow("Confirm the exact");
-    await expect(as(exec,"select archive_task_executions($1,2,true)",[[ea,eb]])).rejects.toThrow("Selection changed");
-    await as(owner,"select task_execution_action($1,'complete')",[eb]);
-    await expect(as(owner,"select archive_task_executions($1,2,true)",[[ea,eb]])).rejects.toThrow("Executive required");
-    await as(exec,"select archive_task_executions($1,2,true)",[[ea,eb]]);
-    expect((await db.query("select count(*)::int as n from task_executions where id=any($1) and archived_at is not null",[[ea,eb]])).rows).toEqual([{n:2}]);
-    const future=await as(owner,"select task_agenda('2026-10-26') as agenda");
-    expect((future.rows[0] as {agenda:{task_id:string,scheduled_date:string}[]}).agenda.some(e=>e.task_id===a && e.scheduled_date==='2026-10-26')).toBe(true);
-    const today=await as(owner,"select task_agenda('2026-10-25') as agenda");
-    expect((today.rows[0] as {agenda:{id:string}[]}).agenda.some(e=>e.id===ea)).toBe(false);
-    expect((await db.query("select body from task_execution_events where execution_id=$1 and action='comment'",[ea])).rows).toEqual([{body:"Keep history"}]);
+    const a = await create({}),
+      b = await create({});
+    await as(owner, "select task_agenda('2026-10-25')");
+    const ea = await execution(a, "2026-10-25"),
+      eb = await execution(b, "2026-10-25");
+    await as(owner, "select task_execution_action($1,'comment','Keep history')", [ea]);
+    await as(owner, "select task_execution_action($1,'complete')", [ea]);
+    await expect(as(exec, "select archive_task_executions($1,1,true)", [[ea, eb]])).rejects.toThrow(
+      "Confirm the exact",
+    );
+    await expect(as(exec, "select archive_task_executions($1,2,true)", [[ea, eb]])).rejects.toThrow(
+      "Selection changed",
+    );
+    await as(owner, "select task_execution_action($1,'complete')", [eb]);
+    await expect(
+      as(owner, "select archive_task_executions($1,2,true)", [[ea, eb]]),
+    ).rejects.toThrow("Executive required");
+    await as(exec, "select archive_task_executions($1,2,true)", [[ea, eb]]);
+    expect(
+      (
+        await db.query(
+          "select count(*)::int as n from task_executions where id=any($1) and archived_at is not null",
+          [[ea, eb]],
+        )
+      ).rows,
+    ).toEqual([{ n: 2 }]);
+    const future = await as(owner, "select task_agenda('2026-10-26') as agenda");
+    expect(
+      (future.rows[0] as { agenda: { task_id: string; scheduled_date: string }[] }).agenda.some(
+        (e) => e.task_id === a && e.scheduled_date === "2026-10-26",
+      ),
+    ).toBe(true);
+    const today = await as(owner, "select task_agenda('2026-10-25') as agenda");
+    expect((today.rows[0] as { agenda: { id: string }[] }).agenda.some((e) => e.id === ea)).toBe(
+      false,
+    );
+    expect(
+      (
+        await db.query(
+          "select body from task_execution_events where execution_id=$1 and action='comment'",
+          [ea],
+        )
+      ).rows,
+    ).toEqual([{ body: "Keep history" }]);
   });
-  it("allows owner single archival but rejects cross-owner archival",async()=>{
-    const tid=await create({recurrence:"once"}); const eid=await execution(tid,"2026-10-25");
-    await expect(as(other,"select archive_task_executions($1,1,false)",[[eid]])).rejects.toThrow("Not authorized");
-    await as(owner,"select archive_task_executions($1,1,false)",[[eid]]);
-    expect((await db.query("select archived_at is not null as archived from task_executions where id=$1",[eid])).rows).toEqual([{archived:true}]);
+  it("allows owner single archival but rejects cross-owner archival", async () => {
+    const tid = await create({ recurrence: "once" });
+    const eid = await execution(tid, "2026-10-25");
+    await expect(as(other, "select archive_task_executions($1,1,false)", [[eid]])).rejects.toThrow(
+      "Not authorized",
+    );
+    await as(owner, "select archive_task_executions($1,1,false)", [[eid]]);
+    expect(
+      (
+        await db.query(
+          "select archived_at is not null as archived from task_executions where id=$1",
+          [eid],
+        )
+      ).rows,
+    ).toEqual([{ archived: true }]);
   });
-
 });
