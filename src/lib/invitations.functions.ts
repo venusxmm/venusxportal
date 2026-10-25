@@ -51,12 +51,11 @@ export const sendNativeInvitation = createServerFn({ method: "POST" })
         email, options: { shouldCreateUser: false, emailRedirectTo: INVITATION_REDIRECT },
       })).error,
     );
-    const { error: trackError } = await supabaseAdmin.from("invitations").update({
-      delivery_status: result.status,
-      delivery_method: result.method,
-      delivery_error: result.status === "failed" ? result.error.slice(0, 300) : null,
-      last_sent_at: result.status === "sent" ? new Date().toISOString() : undefined,
-    }).eq("id", id);
+    const { error: trackError } = await supabaseAdmin.from("invitations").update(
+      result.status === "sent"
+        ? { delivery_status: "sent", delivery_method: result.method, delivery_error: null, last_sent_at: new Date().toISOString() }
+        : { delivery_status: "failed", delivery_method: result.method, delivery_error: result.error.slice(0, 300) },
+    ).eq("id", id);
     if (trackError) console.error("invitation delivery tracking failed", trackError.message);
     return { id, resent: !!pending, ...result };
   });

@@ -5,7 +5,7 @@ export type DeliveryResult =
   | { status: "sent"; method: DeliveryMethod }
   | { status: "failed"; method: DeliveryMethod; error: string };
 
-type ProviderError = { code?: string; status?: number; message?: string } | null;
+type ProviderError = { code?: string | undefined; status?: number | undefined; message?: string | undefined } | null;
 
 export function isExistingIdentityError(error: ProviderError) {
   return !!error && (error.code === "email_exists" || /already been registered/i.test(error.message ?? ""));
