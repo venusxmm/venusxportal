@@ -23,6 +23,7 @@ import { Route as AuthenticatedTeamRouteImport } from './routes/_authenticated/t
 import { Route as AuthCallbackRouteImport } from './routes/auth_.callback'
 import { Route as AuthenticatedCreatorsIndexRouteImport } from './routes/_authenticated/creators.index'
 import { Route as AuthenticatedCreatorsIdRouteImport } from './routes/_authenticated/creators.$id'
+import { Route as ApiPublicInvitationsRouteImport } from './routes/api/public/invitations'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -94,6 +95,11 @@ const AuthenticatedCreatorsIdRoute = AuthenticatedCreatorsIdRouteImport.update({
   path: '/creators/$id',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const ApiPublicInvitationsRoute = ApiPublicInvitationsRouteImport.update({
+  id: '/api/public/invitations',
+  path: '/api/public/invitations',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -108,6 +114,7 @@ export interface FileRoutesByFullPath {
   '/team': typeof AuthenticatedTeamRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/creators/$id': typeof AuthenticatedCreatorsIdRoute
+  '/api/public/invitations': typeof ApiPublicInvitationsRoute
   '/creators/': typeof AuthenticatedCreatorsIndexRoute
 }
 export interface FileRoutesByTo {
@@ -123,6 +130,7 @@ export interface FileRoutesByTo {
   '/team': typeof AuthenticatedTeamRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/creators/$id': typeof AuthenticatedCreatorsIdRoute
+  '/api/public/invitations': typeof ApiPublicInvitationsRoute
   '/creators': typeof AuthenticatedCreatorsIndexRoute
 }
 export interface FileRoutesById {
@@ -140,6 +148,7 @@ export interface FileRoutesById {
   '/_authenticated/team': typeof AuthenticatedTeamRoute
   '/auth_/callback': typeof AuthCallbackRoute
   '/_authenticated/creators/$id': typeof AuthenticatedCreatorsIdRoute
+  '/api/public/invitations': typeof ApiPublicInvitationsRoute
   '/_authenticated/creators/': typeof AuthenticatedCreatorsIndexRoute
 }
 export interface FileRouteTypes {
@@ -157,6 +166,7 @@ export interface FileRouteTypes {
     | '/team'
     | '/auth/callback'
     | '/creators/$id'
+    | '/api/public/invitations'
     | '/creators/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -172,6 +182,7 @@ export interface FileRouteTypes {
     | '/team'
     | '/auth/callback'
     | '/creators/$id'
+    | '/api/public/invitations'
     | '/creators'
   id:
     | '__root__'
@@ -188,6 +199,7 @@ export interface FileRouteTypes {
     | '/_authenticated/team'
     | '/auth_/callback'
     | '/_authenticated/creators/$id'
+    | '/api/public/invitations'
     | '/_authenticated/creators/'
   fileRoutesById: FileRoutesById
 }
@@ -197,6 +209,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
+  ApiPublicInvitationsRoute: typeof ApiPublicInvitationsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -299,6 +312,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCreatorsIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/public/invitations': {
+      id: '/api/public/invitations'
+      path: '/api/public/invitations'
+      fullPath: '/api/public/invitations'
+      preLoaderRoute: typeof ApiPublicInvitationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -335,6 +355,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   AuthCallbackRoute: AuthCallbackRoute,
+  ApiPublicInvitationsRoute: ApiPublicInvitationsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

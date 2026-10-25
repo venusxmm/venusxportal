@@ -342,7 +342,21 @@ function InvitationPanel({
   const send = async (target: string, targetRole: AppRole) => {
     setBusy(true);
     try {
-      const result = await sendInvitation({ data: { email: target.trim(), role: targetRole } });
+      const payload = { email: target.trim(), role: targetRole };
+      // Vercel has no backend secrets; it calls the same logic on Lovable hosting.
+      const result = window.location.hostname === "venusxportal.vercel.app"
+        ? await (async () => {
+            const { data: s } = await supabase.auth.getSession();
+            const res = await fetch("https://venusxportal.lovable.app/api/public/invitations", {
+              method: "POST",
+              headers: { "content-type": "application/json", authorization: `Bearer ${s.session?.access_token ?? ""}` },
+              body: JSON.stringify(payload),
+            });
+            const out = await res.json().catch(() => ({ error: "Invitation service unreachable." }));
+            if (!res.ok) throw new Error(out.error ?? "Invitation failed.");
+            return out as Awaited<ReturnType<typeof sendInvitation>>;
+          })()
+        : await sendInvitation({ data: payload });
       if (result.status === "sent") {
         toast.success(
           result.method === "sign_in_link"
