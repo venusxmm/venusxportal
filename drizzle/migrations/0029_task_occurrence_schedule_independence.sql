@@ -1,0 +1,2 @@
+DROP INDEX public.task_execution_date_unique;
+COMMENT ON INDEX public.task_execution_occurrence_unique IS 'Unique original recurrence occurrence; rescheduling one execution must not suppress another scheduled occurrence.';

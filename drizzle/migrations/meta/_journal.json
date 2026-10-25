@@ -204,6 +204,13 @@
       "when": 1792958186620,
       "tag": "0028_task_move_projected_input_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1792958432706,
+      "tag": "0029_task_occurrence_schedule_independence",
+      "breakpoints": true
     }
   ]
 }
