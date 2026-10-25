@@ -207,7 +207,7 @@ function Tasks() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("creators")
-        .select("id,stage_name")
+        .select("id,stage_name,user_id")
         .is("archived_at", null);
       if (error) throw error;
       return data;
@@ -529,10 +529,16 @@ function Tasks() {
         subtitle="America/Bogota · UTC−5"
         actions={
           me?.isExec && (
-            <Button className="min-h-11" onClick={() => setEditing("new")}>
-              <Plus className="h-4 w-4" />
-              New Task
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" className="min-h-11" onClick={() => setEditingBlocks(true)}>
+                <Clock className="h-4 w-4" />
+                Edit Time Blocks
+              </Button>
+              <Button className="min-h-11" onClick={() => setEditing("new")}>
+                <Plus className="h-4 w-4" />
+                New Task
+              </Button>
+            </div>
           )
         }
       />
@@ -682,7 +688,7 @@ function Tasks() {
               }
               disabled={!eligible.length}
             >
-              {selected.length && selected.length === eligible.length
+              {selected.length > 0 && selected.length === eligible.length
                 ? "Clear Selection"
                 : `Select All (${eligible.length})`}
             </Button>
