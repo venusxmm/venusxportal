@@ -66,3 +66,20 @@ describe("creator portal ordering", () => {
     expect(r.map((x) => x.id)).toEqual(["a", "b", "c"]);
   });
 });
+import { formatTime12, ownerCreatorConsistent, recurrenceLabel } from "./task-executions";
+describe("portal labels and consistency", () => {
+  it("labels recurrence plainly", () => {
+    expect(recurrenceLabel("daily")).toBe("Daily");
+    expect(recurrenceLabel("weekdays", [3, 1])).toBe("Weekly: Mon, Wed");
+  });
+  it("formats 15:00 and 16:00 exactly", () => {
+    expect(formatTime12("15:00:00")).toBe("3:00 PM");
+    expect(formatTime12("16:00")).toBe("4:00 PM");
+    expect(formatTime12("00:30")).toBe("12:30 AM");
+  });
+  it("flags published tasks whose owner is not the linked creator", () => {
+    const users = { c1: "u1" };
+    expect(ownerCreatorConsistent({ owner_id: "u2", creator_id: "c1", visible_to_creator: true }, users, new Set(["u1"]))).toBe(false);
+    expect(ownerCreatorConsistent({ owner_id: "u1", creator_id: "c1", visible_to_creator: true }, users, new Set(["u1"]))).toBe(true);
+  });
+});
