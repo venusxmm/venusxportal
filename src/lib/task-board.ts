@@ -59,6 +59,10 @@ export function currentBlock(now = new Date(), blocks: BoardBlock[] = BOARD_BLOC
     blocks,
   );
 }
+/** Delay until the next whole minute (+50ms), so block changes land on the boundary. */
+export function msToNextMinute(now = new Date()) {
+  return 60_000 - (now.getTime() % 60_000) + 50;
+}
 export function canMoveExecution(task: Execution, executive: boolean) {
   return executive && !task.archived_at && !["done", "skipped", "cancelled"].includes(task.status);
 }

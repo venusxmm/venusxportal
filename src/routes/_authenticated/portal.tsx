@@ -210,9 +210,6 @@ function Portal() {
           </div>
         ))
       )}
-      <p className="mt-8 text-center text-xs text-muted-foreground">
-        Academy, content submissions and messages are coming next.
-      </p>
     </div>
   );
 }

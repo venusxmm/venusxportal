@@ -6,6 +6,7 @@ import {
   currentBlock,
   timeInBlock,
   canMoveExecution,
+  msToNextMinute,
 } from "./task-board";
 import type { Execution } from "./task-executions";
 const task: Execution = {
@@ -68,5 +69,19 @@ describe("configurable blocks", () => {
   it("rejects overlaps and accepts defaults", () => {
     expect(validateBlocks(BOARD_BLOCKS)).toBeNull();
     expect(validateBlocks([night, { id: "x", label: "X", start: "03:00", end: "05:00" }])).toMatch(/overlaps/);
+  });
+});
+describe("Now indicator timing", () => {
+  it("switches Afternoon to Evening exactly at 6:00 PM Bogota", () => {
+    expect(currentBlock(new Date("2026-10-25T22:59:00Z"))?.id).toBe("afternoon");
+    expect(currentBlock(new Date("2026-10-25T23:00:00Z"))?.id).toBe("evening");
+  });
+  it("follows edited boundaries and midnight wrap", () => {
+    const edited = [{ id: "a", label: "Afternoon", start: "15:00", end: "17:30" }, { id: "e", label: "Evening", start: "17:30", end: "02:00" }];
+    expect(currentBlock(new Date("2026-10-25T22:35:00Z"), edited)?.id).toBe("e");
+    expect(currentBlock(new Date("2026-10-26T05:30:00Z"), edited)?.id).toBe("e");
+  });
+  it("ticks at the next minute boundary", () => {
+    expect(msToNextMinute(new Date("2026-10-25T22:59:45Z"))).toBe(15_050);
   });
 });
