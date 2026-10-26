@@ -109,11 +109,28 @@ function Portal() {
     return () => clearTimeout(timer);
   }, [qc]);
   const complete = useMutation({
-    mutationFn: async ({ id, done }: { id: string; done: boolean }) => {
-      const { error } = await supabase.rpc("task_execution_action", {
-        _id: id,
-        _action: done ? "complete" : "reopen",
-      });
+    mutationFn: async ({
+      id,
+      done,
+      taskId,
+      date,
+    }: {
+      id: string;
+      done: boolean;
+      taskId?: string | undefined;
+      date?: string | null | undefined;
+    }) => {
+      const { error } =
+        taskId && date
+          ? await supabase.rpc("task_future_action", {
+              _task_id: taskId,
+              _date: date,
+              _action: done ? "complete" : "reopen",
+            })
+          : await supabase.rpc("task_execution_action", {
+              _id: id,
+              _action: done ? "complete" : "reopen",
+            });
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks"] }),
@@ -165,8 +182,15 @@ function Portal() {
           size="sm"
           className="min-h-11"
           variant={t.status === "done" ? "outline" : "default"}
-          disabled={complete.isPending || t.projected || t.status === "skipped"}
-          onClick={() => complete.mutate({ id: t.id, done: t.status !== "done" })}
+          disabled={complete.isPending || t.status === "skipped"}
+          onClick={() =>
+            complete.mutate({
+              id: t.id,
+              done: t.status !== "done",
+              taskId: t.projected ? t.task_id : undefined,
+              date: t.projected ? t.scheduled_date : undefined,
+            })
+          }
         >
           {t.status === "done" ? "Undo" : t.status === "skipped" ? "Skipped" : "Complete"}
         </Button>
