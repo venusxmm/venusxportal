@@ -49,7 +49,8 @@ describe("Bogota dated execution rules", () => {
     expect(canExecute(task, "other", false)).toBe(false);
     expect(canExecute({ ...task, owner_id: null }, "other", false)).toBe(false);
     expect(canExecute(task, "other", true)).toBe(true);
-    expect(canExecute({ ...task, projected: true }, "owner", false)).toBe(false);
+    expect(canExecute({ ...task, projected: true }, "owner", false)).toBe(true);
+    expect(canExecute({ ...task, projected: true }, "other", false)).toBe(false);
   });
   it("navigates dates without device timezone drift", () =>
     expect(shiftDate("2026-10-31", 1)).toBe("2026-11-01"));
