@@ -337,7 +337,6 @@ function Tasks() {
     const allowed =
       !!me &&
       !t.archived_at &&
-      !t.projected &&
       t.status !== "cancelled" &&
       (canExecute(t, me.id, me.isExec) || !!t.visible_to_creator);
     const overdueState = executionOverdue(t, now);
