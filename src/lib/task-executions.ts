@@ -49,7 +49,7 @@ export function scheduledFor(task: Execution, date: string) {
   return task.scheduled_date === date;
 }
 export function canExecute(task: Execution, userId: string, executive: boolean) {
-  return !task.projected && task.status !== "cancelled" && (executive || task.owner_id === userId);
+  return task.status !== "cancelled" && (executive || task.owner_id === userId);
 }
 export function appliesOn(mode: string, weekdays: number[], start: string, date: string) {
   if (date < start) return false;
