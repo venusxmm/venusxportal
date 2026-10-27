@@ -120,7 +120,7 @@ function AccountRow({
         disabled={busy}
         onClick={async () => {
           const n = pct === "" ? null : Number(pct);
-          if (creator !== "none" && (n == null || !(n >= 0 && n <= 100))) return toast.error("Enter the agency % (0–100) for this model's contract.");
+          if (creator !== "none" && (n == null || !(n >= 0 && n <= 100))) { toast.error("Enter the agency % (0–100) for this model's contract."); return; }
           setBusy(true);
           try {
             await onSave({ id: a.id, creator_id: creator === "none" ? null : creator, agency_share_pct: n });
