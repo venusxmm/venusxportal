@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -8,6 +8,8 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { useMe } from "@/lib/me";
 import { postCreatorPayout } from "@/lib/payout.functions";
+import { bogotaDate, periodRange, type Period } from "@/lib/onlymonster";
+import { OnlyMonsterPanel } from "@/components/onlymonster-panel";
 import {
   DEFAULT_AGENCY_SHARE_PCT,
   inRange,
@@ -54,7 +56,30 @@ type Transaction = {
   external_ref: string | null;
   shared_with_creator: boolean;
   creators: { stage_name: string } | null;
+  source: string;
+  external_status: string | null;
+  archived_at: string | null;
 };
+
+function useBogotaToday() {
+  const calc = () => bogotaDate(new Date().toISOString());
+  const [d, setD] = useState(calc);
+  useEffect(() => {
+    const t = setInterval(() => setD(calc()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+  return d;
+}
+
+const PERIODS: [Period, string][] = [
+  ["today", "Today"],
+  ["yesterday", "Yesterday"],
+  ["last7", "Last 7 days"],
+  ["week", "This week"],
+  ["month", "This month"],
+  ["lastMonth", "Last month"],
+  ["custom", "Custom"],
+];
 
 export const Route = createFileRoute("/_authenticated/finance")({
   head: () => ({
@@ -76,20 +101,26 @@ export const Route = createFileRoute("/_authenticated/finance")({
 function Finance() {
   const { data: me } = useMe();
   const qc = useQueryClient();
-  const [from, setFrom] = useState(new Date().getFullYear() + "-01-01");
-  const [to, setTo] = useState("");
+  const today = useBogotaToday();
+  const [period, setPeriod] = useState<Period>("today");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+  const range = period === "custom" ? { from: customFrom, to: customTo } : periodRange(period, today);
+  const from = range.from;
+  const to = range.to;
   const [creator, setCreator] = useState("all");
   const [editing, setEditing] = useState<Transaction | null>(null);
 
   const txns = useQuery({
     queryKey: ["transactions", "all"],
     queryFn: async () => {
+      // Voided imported rows are fetched only to show their status; summarize() excludes them.
       const { data, error } = await supabase
         .from("transactions")
         .select("*, creators(stage_name)")
-        .is("archived_at", null)
+        .or("archived_at.is.null,source.neq.manual")
         .order("occurred_on", { ascending: false })
-        .limit(1000);
+        .limit(5000);
       if (error) throw error;
       return data as Transaction[];
     },
