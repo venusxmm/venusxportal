@@ -350,7 +350,7 @@ function Finance() {
                       )}
                     </td>
                     <td className="p-3 text-right">
-                      {t.source === "manual" && (<></>)}
+                      {t.source === "manual" && (<>
                       <Button
                         aria-label={`Edit ${t.category}`}
                         title="Edit transaction"
@@ -379,6 +379,7 @@ function Finance() {
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
+                      </>)}
                     </td>
                   </tr>
                 ))}
