@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -8,6 +8,8 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { useMe } from "@/lib/me";
 import { postCreatorPayout } from "@/lib/payout.functions";
+import { bogotaDate, periodRange, type Period } from "@/lib/onlymonster";
+import { OnlyMonsterPanel } from "@/components/onlymonster-panel";
 import {
   DEFAULT_AGENCY_SHARE_PCT,
   inRange,
@@ -54,7 +56,30 @@ type Transaction = {
   external_ref: string | null;
   shared_with_creator: boolean;
   creators: { stage_name: string } | null;
+  source: string;
+  external_status: string | null;
+  archived_at: string | null;
 };
+
+function useBogotaToday() {
+  const calc = () => bogotaDate(new Date().toISOString());
+  const [d, setD] = useState(calc);
+  useEffect(() => {
+    const t = setInterval(() => setD(calc()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+  return d;
+}
+
+const PERIODS: [Period, string][] = [
+  ["today", "Today"],
+  ["yesterday", "Yesterday"],
+  ["last7", "Last 7 days"],
+  ["week", "This week"],
+  ["month", "This month"],
+  ["lastMonth", "Last month"],
+  ["custom", "Custom"],
+];
 
 export const Route = createFileRoute("/_authenticated/finance")({
   head: () => ({
@@ -76,20 +101,26 @@ export const Route = createFileRoute("/_authenticated/finance")({
 function Finance() {
   const { data: me } = useMe();
   const qc = useQueryClient();
-  const [from, setFrom] = useState(new Date().getFullYear() + "-01-01");
-  const [to, setTo] = useState("");
+  const today = useBogotaToday();
+  const [period, setPeriod] = useState<Period>("today");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+  const range = period === "custom" ? { from: customFrom, to: customTo } : periodRange(period, today);
+  const from = range.from;
+  const to = range.to;
   const [creator, setCreator] = useState("all");
   const [editing, setEditing] = useState<Transaction | null>(null);
 
   const txns = useQuery({
     queryKey: ["transactions", "all"],
     queryFn: async () => {
+      // Voided imported rows are fetched only to show their status; summarize() excludes them.
       const { data, error } = await supabase
         .from("transactions")
         .select("*, creators(stage_name)")
-        .is("archived_at", null)
+        .or("archived_at.is.null,source.neq.manual")
         .order("occurred_on", { ascending: false })
-        .limit(1000);
+        .limit(5000);
       if (error) throw error;
       return data as Transaction[];
     },
@@ -139,15 +170,42 @@ function Finance() {
         subtitle="Every figure is computed from ledger entries below. Currencies are never combined."
         actions={<NewTxn creators={creators.data ?? []} />}
       />
+      <OnlyMonsterPanel creators={creators.data ?? []} />
+      <div className="mb-3 flex flex-wrap gap-2">
+        {PERIODS.map(([p, label]) => (
+          <Button
+            key={p}
+            size="sm"
+            variant={period === p ? "default" : "outline"}
+            onClick={() => {
+              if (p === "custom" && !customFrom) {
+                setCustomFrom(from);
+                setCustomTo(to);
+              }
+              setPeriod(p);
+            }}
+          >
+            {label}
+          </Button>
+        ))}
+      </div>
       <div className="mb-6 flex flex-wrap items-end gap-3">
-        <div className="space-y-1">
-          <Label className="text-xs">From</Label>
-          <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs">To</Label>
-          <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-        </div>
+        {period === "custom" ? (
+          <>
+            <div className="space-y-1">
+              <Label className="text-xs">From</Label>
+              <Input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">To</Label>
+              <Input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} />
+            </div>
+          </>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            {from === to ? from : `${from} → ${to}`} · Bogotá time
+          </p>
+        )}
         <Select value={creator} onValueChange={setCreator}>
           <SelectTrigger className="w-48">
             <SelectValue />
@@ -256,12 +314,13 @@ function Finance() {
                   <th className="p-3">Creator</th>
                   <th className="p-3 text-right">Amount</th>
                   <th className="p-3">Agency %</th>
+                  <th className="p-3">Source · Status</th>
                   <th className="p-3" />
                 </tr>
               </thead>
               <tbody className="divide-y">
                 {filtered.map((t) => (
-                  <tr key={t.id}>
+                  <tr key={t.id} className={t.archived_at ? "text-muted-foreground line-through" : ""}>
                     <td className="p-3">{t.occurred_on}</td>
                     <td className="p-3">
                       <Pill value={t.kind} />
@@ -279,7 +338,19 @@ function Finance() {
                     <td className="p-3 text-muted-foreground">
                       {t.kind === "revenue" ? `${t.agency_share_pct ?? 100}%` : "—"}
                     </td>
+                    <td className="p-3 text-xs">
+                      {t.source === "manual" ? (
+                        <span className="text-muted-foreground">Manual</span>
+                      ) : (
+                        <span className="text-gold">
+                          Imported · OnlyMonster
+                          {t.external_status ? ` · ${t.external_status === "loading" ? "pending" : t.external_status}` : ""}
+                          {t.archived_at ? " · voided" : ""}
+                        </span>
+                      )}
+                    </td>
                     <td className="p-3 text-right">
+                      {t.source === "manual" && (<>
                       <Button
                         aria-label={`Edit ${t.category}`}
                         title="Edit transaction"
@@ -308,6 +379,7 @@ function Finance() {
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
+                      </>)}
                     </td>
                   </tr>
                 ))}

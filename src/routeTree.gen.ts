@@ -24,6 +24,7 @@ import { Route as AuthCallbackRouteImport } from './routes/auth_.callback'
 import { Route as AuthenticatedCreatorsIndexRouteImport } from './routes/_authenticated/creators.index'
 import { Route as AuthenticatedCreatorsIdRouteImport } from './routes/_authenticated/creators.$id'
 import { Route as ApiPublicInvitationsRouteImport } from './routes/api/public/invitations'
+import { Route as ApiPublicJobsOnlymonsterSyncRouteImport } from './routes/api/public/jobs/onlymonster-sync'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -100,6 +101,12 @@ const ApiPublicInvitationsRoute = ApiPublicInvitationsRouteImport.update({
   path: '/api/public/invitations',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicJobsOnlymonsterSyncRoute =
+  ApiPublicJobsOnlymonsterSyncRouteImport.update({
+    id: '/api/public/jobs/onlymonster-sync',
+    path: '/api/public/jobs/onlymonster-sync',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -116,6 +123,7 @@ export interface FileRoutesByFullPath {
   '/creators/$id': typeof AuthenticatedCreatorsIdRoute
   '/api/public/invitations': typeof ApiPublicInvitationsRoute
   '/creators/': typeof AuthenticatedCreatorsIndexRoute
+  '/api/public/jobs/onlymonster-sync': typeof ApiPublicJobsOnlymonsterSyncRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -132,6 +140,7 @@ export interface FileRoutesByTo {
   '/creators/$id': typeof AuthenticatedCreatorsIdRoute
   '/api/public/invitations': typeof ApiPublicInvitationsRoute
   '/creators': typeof AuthenticatedCreatorsIndexRoute
+  '/api/public/jobs/onlymonster-sync': typeof ApiPublicJobsOnlymonsterSyncRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -150,6 +159,7 @@ export interface FileRoutesById {
   '/_authenticated/creators/$id': typeof AuthenticatedCreatorsIdRoute
   '/api/public/invitations': typeof ApiPublicInvitationsRoute
   '/_authenticated/creators/': typeof AuthenticatedCreatorsIndexRoute
+  '/api/public/jobs/onlymonster-sync': typeof ApiPublicJobsOnlymonsterSyncRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -168,6 +178,7 @@ export interface FileRouteTypes {
     | '/creators/$id'
     | '/api/public/invitations'
     | '/creators/'
+    | '/api/public/jobs/onlymonster-sync'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -184,6 +195,7 @@ export interface FileRouteTypes {
     | '/creators/$id'
     | '/api/public/invitations'
     | '/creators'
+    | '/api/public/jobs/onlymonster-sync'
   id:
     | '__root__'
     | '/'
@@ -201,6 +213,7 @@ export interface FileRouteTypes {
     | '/_authenticated/creators/$id'
     | '/api/public/invitations'
     | '/_authenticated/creators/'
+    | '/api/public/jobs/onlymonster-sync'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -210,6 +223,7 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   ApiPublicInvitationsRoute: typeof ApiPublicInvitationsRoute
+  ApiPublicJobsOnlymonsterSyncRoute: typeof ApiPublicJobsOnlymonsterSyncRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -319,6 +333,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicInvitationsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/jobs/onlymonster-sync': {
+      id: '/api/public/jobs/onlymonster-sync'
+      path: '/api/public/jobs/onlymonster-sync'
+      fullPath: '/api/public/jobs/onlymonster-sync'
+      preLoaderRoute: typeof ApiPublicJobsOnlymonsterSyncRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -356,6 +377,7 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   ApiPublicInvitationsRoute: ApiPublicInvitationsRoute,
+  ApiPublicJobsOnlymonsterSyncRoute: ApiPublicJobsOnlymonsterSyncRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

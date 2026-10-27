@@ -150,6 +150,51 @@ export type Database = {
         }
         Relationships: []
       }
+      integration_sync_runs: {
+        Row: {
+          actor_id: string | null
+          error: string | null
+          fetched: number
+          finished_at: string | null
+          id: string
+          inserted: number
+          ok: boolean | null
+          provider: string
+          started_at: string
+          trigger: string
+          updated: number
+          voided: number
+        }
+        Insert: {
+          actor_id?: string | null
+          error?: string | null
+          fetched?: number
+          finished_at?: string | null
+          id?: string
+          inserted?: number
+          ok?: boolean | null
+          provider: string
+          started_at?: string
+          trigger: string
+          updated?: number
+          voided?: number
+        }
+        Update: {
+          actor_id?: string | null
+          error?: string | null
+          fetched?: number
+          finished_at?: string | null
+          id?: string
+          inserted?: number
+          ok?: boolean | null
+          provider?: string
+          started_at?: string
+          trigger?: string
+          updated?: number
+          voided?: number
+        }
+        Relationships: []
+      }
       invitations: {
         Row: {
           accepted_at: string | null
@@ -254,6 +299,56 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      onlymonster_accounts: {
+        Row: {
+          agency_share_pct: number | null
+          created_at: string
+          creator_id: string | null
+          currency: string
+          id: string
+          last_synced_at: string | null
+          name: string | null
+          platform: string
+          platform_account_id: string
+          updated_at: string
+          username: string | null
+        }
+        Insert: {
+          agency_share_pct?: number | null
+          created_at?: string
+          creator_id?: string | null
+          currency?: string
+          id: string
+          last_synced_at?: string | null
+          name?: string | null
+          platform: string
+          platform_account_id: string
+          updated_at?: string
+          username?: string | null
+        }
+        Update: {
+          agency_share_pct?: number | null
+          created_at?: string
+          creator_id?: string | null
+          currency?: string
+          id?: string
+          last_synced_at?: string | null
+          name?: string | null
+          platform?: string
+          platform_account_id?: string
+          updated_at?: string
+          username?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "onlymonster_accounts_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
+            referencedRelation: "creators"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -641,11 +736,17 @@ export type Database = {
           currency: string
           deduct_from_agency_cut: boolean
           description: string | null
+          external_account_id: string | null
+          external_platform: string | null
           external_ref: string | null
+          external_status: string | null
+          external_type: string | null
           id: string
           kind: Database["public"]["Enums"]["txn_kind"]
+          occurred_at: string | null
           occurred_on: string
           shared_with_creator: boolean
+          source: string
           updated_at: string
         }
         Insert: {
@@ -659,11 +760,17 @@ export type Database = {
           currency?: string
           deduct_from_agency_cut?: boolean
           description?: string | null
+          external_account_id?: string | null
+          external_platform?: string | null
           external_ref?: string | null
+          external_status?: string | null
+          external_type?: string | null
           id?: string
           kind: Database["public"]["Enums"]["txn_kind"]
+          occurred_at?: string | null
           occurred_on?: string
           shared_with_creator?: boolean
+          source?: string
           updated_at?: string
         }
         Update: {
@@ -677,11 +784,17 @@ export type Database = {
           currency?: string
           deduct_from_agency_cut?: boolean
           description?: string | null
+          external_account_id?: string | null
+          external_platform?: string | null
           external_ref?: string | null
+          external_status?: string | null
+          external_type?: string | null
           id?: string
           kind?: Database["public"]["Enums"]["txn_kind"]
+          occurred_at?: string | null
           occurred_on?: string
           shared_with_creator?: boolean
+          source?: string
           updated_at?: string
         }
         Relationships: [
