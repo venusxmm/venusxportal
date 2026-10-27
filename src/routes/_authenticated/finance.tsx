@@ -314,12 +314,13 @@ function Finance() {
                   <th className="p-3">Creator</th>
                   <th className="p-3 text-right">Amount</th>
                   <th className="p-3">Agency %</th>
+                  <th className="p-3">Source · Status</th>
                   <th className="p-3" />
                 </tr>
               </thead>
               <tbody className="divide-y">
                 {filtered.map((t) => (
-                  <tr key={t.id}>
+                  <tr key={t.id} className={t.archived_at ? "text-muted-foreground line-through" : ""}>
                     <td className="p-3">{t.occurred_on}</td>
                     <td className="p-3">
                       <Pill value={t.kind} />
@@ -337,7 +338,19 @@ function Finance() {
                     <td className="p-3 text-muted-foreground">
                       {t.kind === "revenue" ? `${t.agency_share_pct ?? 100}%` : "—"}
                     </td>
+                    <td className="p-3 text-xs">
+                      {t.source === "manual" ? (
+                        <span className="text-muted-foreground">Manual</span>
+                      ) : (
+                        <span className="text-gold">
+                          Imported · OnlyMonster
+                          {t.external_status ? ` · ${t.external_status === "loading" ? "pending" : t.external_status}` : ""}
+                          {t.archived_at ? " · voided" : ""}
+                        </span>
+                      )}
+                    </td>
                     <td className="p-3 text-right">
+                      {t.source === "manual" && (<></>)}
                       <Button
                         aria-label={`Edit ${t.category}`}
                         title="Edit transaction"
