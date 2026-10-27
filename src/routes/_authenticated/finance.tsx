@@ -170,15 +170,42 @@ function Finance() {
         subtitle="Every figure is computed from ledger entries below. Currencies are never combined."
         actions={<NewTxn creators={creators.data ?? []} />}
       />
+      <OnlyMonsterPanel creators={creators.data ?? []} />
+      <div className="mb-3 flex flex-wrap gap-2">
+        {PERIODS.map(([p, label]) => (
+          <Button
+            key={p}
+            size="sm"
+            variant={period === p ? "default" : "outline"}
+            onClick={() => {
+              if (p === "custom" && !customFrom) {
+                setCustomFrom(from);
+                setCustomTo(to);
+              }
+              setPeriod(p);
+            }}
+          >
+            {label}
+          </Button>
+        ))}
+      </div>
       <div className="mb-6 flex flex-wrap items-end gap-3">
-        <div className="space-y-1">
-          <Label className="text-xs">From</Label>
-          <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs">To</Label>
-          <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-        </div>
+        {period === "custom" ? (
+          <>
+            <div className="space-y-1">
+              <Label className="text-xs">From</Label>
+              <Input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">To</Label>
+              <Input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} />
+            </div>
+          </>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            {from === to ? from : `${from} → ${to}`} · Bogotá time
+          </p>
+        )}
         <Select value={creator} onValueChange={setCreator}>
           <SelectTrigger className="w-48">
             <SelectValue />
