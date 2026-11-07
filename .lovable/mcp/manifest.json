@@ -1,0 +1,402 @@
+{
+  "version": 1,
+  "sdk_version": "3.4.0",
+  "path": "/mcp",
+  "auth": {
+    "type": "oauth",
+    "issuer": "https://equirryhfkmxejawrwzj.supabase.co/auth/v1",
+    "accepted_audiences": [
+      "authenticated"
+    ]
+  },
+  "mcp": {
+    "server": {
+      "name": "venusxportal",
+      "version": "0.1.0",
+      "title": "Venusxportal"
+    },
+    "tools": [
+      {
+        "name": "get_dashboard_summary",
+        "title": "Dashboard summary",
+        "description": "Open, overdue and critical task counts for a day plus this month's finance totals when your role allows.",
+        "annotations": {
+          "readOnlyHint": true
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "date": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "description": "Date YYYY-MM-DD (America/Bogota)"
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_recent_activity",
+        "title": "Recent activity",
+        "description": "Latest audit log events visible to you.",
+        "annotations": {
+          "readOnlyHint": true
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_tasks",
+        "title": "List tasks",
+        "description": "Task executions for one day (default today, Bogotá), optionally filtered by status or title text.",
+        "annotations": {
+          "readOnlyHint": true
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "date": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "description": "Date YYYY-MM-DD (America/Bogota)"
+            },
+            "status": {
+              "type": "string",
+              "description": "todo, in_progress, blocked, review, done, skipped"
+            },
+            "query": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_task",
+        "title": "Get task",
+        "description": "A task's configuration, its execution on a date (default today) and its comments.",
+        "annotations": {
+          "readOnlyHint": true
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "date": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "description": "Date YYYY-MM-DD (America/Bogota)"
+            }
+          },
+          "required": [
+            "task_id"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "create_task",
+        "title": "Create task",
+        "description": "Create a task (Executives only, enforced by the portal).",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": {
+              "type": "string",
+              "maxLength": 5000
+            },
+            "priority": {
+              "type": "string",
+              "enum": [
+                "low",
+                "medium",
+                "high",
+                "critical"
+              ]
+            },
+            "due_date": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                  "description": "Date YYYY-MM-DD (America/Bogota)"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Date YYYY-MM-DD (America/Bogota)"
+            },
+            "due_time": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\d{2}:\\d{2}$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "HH:MM 24h Bogotá"
+            },
+            "owner_id": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "creator_id": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "recurrence": {
+              "type": "string",
+              "enum": [
+                "once",
+                "daily",
+                "weekdays"
+              ]
+            },
+            "weekdays": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 6
+              },
+              "description": "0=Sun..6=Sat, for weekdays"
+            },
+            "visible_to_creator": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "title"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "update_task",
+        "title": "Update task",
+        "description": "Edit a task's configuration; only given fields change (Executives only, enforced by the portal).",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "idempotentHint": true
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": {
+              "type": "string",
+              "maxLength": 5000
+            },
+            "priority": {
+              "type": "string",
+              "enum": [
+                "low",
+                "medium",
+                "high",
+                "critical"
+              ]
+            },
+            "due_date": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                  "description": "Date YYYY-MM-DD (America/Bogota)"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Date YYYY-MM-DD (America/Bogota)"
+            },
+            "due_time": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\d{2}:\\d{2}$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "HH:MM 24h Bogotá"
+            },
+            "owner_id": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "creator_id": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "recurrence": {
+              "type": "string",
+              "enum": [
+                "once",
+                "daily",
+                "weekdays"
+              ]
+            },
+            "weekdays": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 6
+              },
+              "description": "0=Sun..6=Sat, for weekdays"
+            },
+            "visible_to_creator": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "task_id"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "complete_task",
+        "title": "Complete task",
+        "description": "Mark one dated execution of a task as completed (only that date).",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "idempotentHint": true
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "date": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "description": "Date YYYY-MM-DD (America/Bogota)"
+            }
+          },
+          "required": [
+            "task_id",
+            "date"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "reopen_task",
+        "title": "Reopen task",
+        "description": "Undo completion of one dated execution of a task.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "idempotentHint": true
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "date": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "description": "Date YYYY-MM-DD (America/Bogota)"
+            }
+          },
+          "required": [
+            "task_id",
+            "date"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}
