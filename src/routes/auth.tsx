@@ -17,6 +17,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { oauthReturnPath } from "@/lib/oauth-return-path";
+
+function consentReturn(): string | null {
+  const path = oauthReturnPath(new URLSearchParams(window.location.search).get("next"));
+  return path.startsWith("/.lovable/oauth/consent") ? path : null;
+}
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -103,6 +109,8 @@ function AuthPage() {
         if (error) throw error;
         if (data.session) {
           await completeInvitation(token);
+          const back = consentReturn();
+          if (back) { window.location.replace(back); return; }
           const route = await authenticatedWorkspaceRoute();
           if (active) navigate({ to: route, replace: true });
         }
@@ -174,6 +182,8 @@ function AuthPage() {
         });
         if (error) throw error;
         await completeInvitation(invite);
+        const back = consentReturn();
+        if (back) { window.location.replace(back); return; }
         const route = await authenticatedWorkspaceRoute();
         await queryClient.invalidateQueries({ queryKey: ["me"] });
         navigate({ to: route, replace: true });
