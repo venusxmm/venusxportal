@@ -21,6 +21,7 @@ import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedTasksRouteImport } from './routes/_authenticated/tasks'
 import { Route as AuthenticatedTeamRouteImport } from './routes/_authenticated/team'
 import { Route as AuthCallbackRouteImport } from './routes/auth_.callback'
+import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
 import { Route as AuthenticatedCreatorsIndexRouteImport } from './routes/_authenticated/creators.index'
 import { Route as AuthenticatedCreatorsIdRouteImport } from './routes/_authenticated/creators.$id'
 import { Route as ApiPublicInvitationsRouteImport } from './routes/api/public/invitations'
@@ -85,6 +86,11 @@ const AuthCallbackRoute = AuthCallbackRouteImport.update({
   path: '/auth/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DotlovableOauthConsentRoute = DotlovableOauthConsentRouteImport.update({
+  id: '/.lovable/oauth/consent',
+  path: '/.lovable/oauth/consent',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedCreatorsIndexRoute =
   AuthenticatedCreatorsIndexRouteImport.update({
     id: '/creators/',
@@ -120,6 +126,7 @@ export interface FileRoutesByFullPath {
   '/tasks': typeof AuthenticatedTasksRoute
   '/team': typeof AuthenticatedTeamRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/creators/$id': typeof AuthenticatedCreatorsIdRoute
   '/api/public/invitations': typeof ApiPublicInvitationsRoute
   '/creators/': typeof AuthenticatedCreatorsIndexRoute
@@ -137,6 +144,7 @@ export interface FileRoutesByTo {
   '/tasks': typeof AuthenticatedTasksRoute
   '/team': typeof AuthenticatedTeamRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/creators/$id': typeof AuthenticatedCreatorsIdRoute
   '/api/public/invitations': typeof ApiPublicInvitationsRoute
   '/creators': typeof AuthenticatedCreatorsIndexRoute
@@ -156,6 +164,7 @@ export interface FileRoutesById {
   '/_authenticated/tasks': typeof AuthenticatedTasksRoute
   '/_authenticated/team': typeof AuthenticatedTeamRoute
   '/auth_/callback': typeof AuthCallbackRoute
+  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/_authenticated/creators/$id': typeof AuthenticatedCreatorsIdRoute
   '/api/public/invitations': typeof ApiPublicInvitationsRoute
   '/_authenticated/creators/': typeof AuthenticatedCreatorsIndexRoute
@@ -175,6 +184,7 @@ export interface FileRouteTypes {
     | '/tasks'
     | '/team'
     | '/auth/callback'
+    | '/.lovable/oauth/consent'
     | '/creators/$id'
     | '/api/public/invitations'
     | '/creators/'
@@ -192,6 +202,7 @@ export interface FileRouteTypes {
     | '/tasks'
     | '/team'
     | '/auth/callback'
+    | '/.lovable/oauth/consent'
     | '/creators/$id'
     | '/api/public/invitations'
     | '/creators'
@@ -210,6 +221,7 @@ export interface FileRouteTypes {
     | '/_authenticated/tasks'
     | '/_authenticated/team'
     | '/auth_/callback'
+    | '/.lovable/oauth/consent'
     | '/_authenticated/creators/$id'
     | '/api/public/invitations'
     | '/_authenticated/creators/'
@@ -222,6 +234,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
+  DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
   ApiPublicInvitationsRoute: typeof ApiPublicInvitationsRoute
   ApiPublicJobsOnlymonsterSyncRoute: typeof ApiPublicJobsOnlymonsterSyncRoute
 }
@@ -312,6 +325,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/.lovable/oauth/consent': {
+      id: '/.lovable/oauth/consent'
+      path: '/.lovable/oauth/consent'
+      fullPath: '/.lovable/oauth/consent'
+      preLoaderRoute: typeof DotlovableOauthConsentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/creators/': {
       id: '/_authenticated/creators/'
       path: '/creators'
@@ -376,6 +396,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   AuthCallbackRoute: AuthCallbackRoute,
+  DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
   ApiPublicInvitationsRoute: ApiPublicInvitationsRoute,
   ApiPublicJobsOnlymonsterSyncRoute: ApiPublicJobsOnlymonsterSyncRoute,
 }
