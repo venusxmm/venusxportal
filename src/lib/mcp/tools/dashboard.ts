@@ -34,7 +34,7 @@ export default defineTool({
         completed: rows.filter((r) => r.status === "done").length,
       },
       finance_month: month,
-      finance: JSON.parse(JSON.stringify(finance)) as Record<string, unknown>[],
+      finance: JSON.parse(JSON.stringify(finance)) as { [k: string]: string | number | null }[],
     });
   },
 });
