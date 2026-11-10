@@ -480,6 +480,7 @@ export type Database = {
           scheduled_date: string | null
           skip_reason: string | null
           skip_state: string
+          sort_order: number | null
           status: string
           task_id: string
           title: string
@@ -503,6 +504,7 @@ export type Database = {
           scheduled_date?: string | null
           skip_reason?: string | null
           skip_state?: string
+          sort_order?: number | null
           status?: string
           task_id: string
           title: string
@@ -526,6 +528,7 @@ export type Database = {
           scheduled_date?: string | null
           skip_reason?: string | null
           skip_state?: string
+          sort_order?: number | null
           status?: string
           task_id?: string
           title?: string
@@ -955,6 +958,7 @@ export type Database = {
         Returns: number
       }
       remove_team_member: { Args: { _user_id: string }; Returns: boolean }
+      reorder_task_executions: { Args: { _ids: string[] }; Returns: number }
       resolve_creator_link: { Args: never; Returns: string }
       restore_task_executions: {
         Args: { _confirm_count: number; _ids: string[] }

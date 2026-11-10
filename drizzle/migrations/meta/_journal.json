@@ -253,6 +253,13 @@
       "when": 1793119843133,
       "tag": "0035_onlymonster_finance_sync",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1794273773309,
+      "tag": "0036_task_manual_order",
+      "breakpoints": true
     }
   ]
 }
