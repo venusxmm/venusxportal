@@ -1,6 +1,7 @@
 export const AGENCY_TIMEZONE = "America/Bogota";
 export type Execution = {
   id: string;
+  sort_order?: number | null;
   task_id: string;
   title: string;
   description: string | null;
@@ -105,5 +106,15 @@ export function portalVisible<T extends { recurring: boolean; projected?: boolea
 ): T[] {
   return rows.filter(
     (t) => !((t.recurring || t.projected) && !!t.scheduled_date && t.scheduled_date > today),
+  );
+}
+
+/** Manual order first (persisted sort_order), then date, then time. Time never forces position. */
+export function compareExecutions(a: Execution, b: Execution): number {
+  return (
+    (a.scheduled_date ?? "9999").localeCompare(b.scheduled_date ?? "9999") ||
+    (a.sort_order ?? 1e9) - (b.sort_order ?? 1e9) ||
+    (a.due_time ?? "24:00").localeCompare(b.due_time ?? "24:00") ||
+    a.title.localeCompare(b.title)
   );
 }
