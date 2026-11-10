@@ -396,6 +396,127 @@
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
         "outputSchema": null
+      },
+      {
+        "name": "trash_task",
+        "title": "Move task to Trash",
+        "description": "Soft-delete one dated occurrence (scope=occurrence) or the whole task/series (scope=series). Reversible via restore_task. Requires confirm=true.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": true,
+          "idempotentHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "scope": {
+              "type": "string",
+              "enum": [
+                "occurrence",
+                "series"
+              ]
+            },
+            "date": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "description": "Required for scope=occurrence"
+            },
+            "confirm": {
+              "type": "boolean",
+              "const": true,
+              "description": "Must be true to confirm"
+            }
+          },
+          "required": [
+            "task_id",
+            "scope",
+            "confirm"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_trash",
+        "title": "List Trash",
+        "description": "List task occurrences and series currently in Trash that you can see.",
+        "annotations": {
+          "readOnlyHint": true
+        },
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "restore_task",
+        "title": "Restore task from Trash",
+        "description": "Restore a trashed occurrence (execution_id) or a trashed series (task_id).",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "idempotentHint": true
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "execution_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "task_id": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "reorder_tasks",
+        "title": "Reorder tasks",
+        "description": "Set the manual order of tasks on one date. Pass task_ids top-to-bottom; order is independent of time.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "idempotentHint": true
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "date": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "description": "Date YYYY-MM-DD (America/Bogota)"
+            },
+            "task_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "minItems": 1,
+              "maxItems": 200
+            }
+          },
+          "required": [
+            "date",
+            "task_ids"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
       }
     ]
   }
