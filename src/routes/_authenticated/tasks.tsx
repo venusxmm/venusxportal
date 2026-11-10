@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { compareExecutions } from "@/lib/task-executions";
 import type { Database } from "@/integrations/supabase/types";
 import { useMe } from "@/lib/me";
 import {
@@ -33,7 +34,6 @@ import {
   msToNextMinute,
   timeInBlock,
   canMoveExecution,
-  compareExecutions,
   titleCase,
   validateBlocks,
   type BoardBlock,
