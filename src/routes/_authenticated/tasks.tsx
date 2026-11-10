@@ -311,11 +311,20 @@ function Tasks() {
             ? !["done", "skipped", "cancelled"].includes(t.status)
             : t.status === status)),
     )
-    .sort(
-      (a, b) =>
-        (a.scheduled_date ?? "9999").localeCompare(b.scheduled_date ?? "9999") ||
-        (a.due_time ?? "24:00").localeCompare(b.due_time ?? "24:00"),
-    );
+    .sort(compareExecutions);
+  const reorderOnto = async (target: Execution) => {
+    const src = dragging;
+    if (!src || src.id === target.id || src.projected || target.projected) return false;
+    if (src.scheduled_date !== target.scheduled_date) return false;
+    const list = rows.filter((r) => !r.projected && r.scheduled_date === target.scheduled_date && r.id !== src.id);
+    list.splice(list.findIndex((r) => r.id === target.id), 0, src);
+    setDragging(null);
+    setDropBlock(null);
+    const { error } = await supabase.rpc("reorder_task_executions", { _ids: list.map((r) => r.id) });
+    if (error) toast.error(error.message);
+    qc.invalidateQueries({ queryKey: ["tasks"] });
+    return true;
+  };
   const eligible = rows.filter((t) => !t.projected && t.status !== "cancelled");
   const isSeries = (t: Execution) => {
     const c = configurations.data?.find((x) => x.id === t.task_id);
@@ -341,7 +350,23 @@ function Tasks() {
       (canExecute(t, me.id, me.isExec) || !!t.visible_to_creator);
     const overdueState = executionOverdue(t, now);
     return (
-      <article key={t.id} className="min-w-0 rounded-md border bg-card p-3">
+      <article
+        key={t.id}
+        className="min-w-0 rounded-md border bg-card p-2.5"
+        onDragOver={(e) => {
+          if (dragging && dragging.id !== t.id && dragging.scheduled_date === t.scheduled_date && !t.projected && !dragging.projected) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        }}
+        onDrop={(e) => {
+          if (dragging && dragging.id !== t.id && dragging.scheduled_date === t.scheduled_date && !t.projected && !dragging.projected) {
+            e.preventDefault();
+            e.stopPropagation();
+            void reorderOnto(t);
+          }
+        }}
+      >
         <div className="mb-2 flex items-center justify-between gap-2">
           {canMoveExecution(t, !!me?.isExec) && t.scheduled_date ? (
             <Button
@@ -378,13 +403,15 @@ function Tasks() {
         </div>
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
           <div className="min-w-0">
-            <p
-              className={`mb-2 flex items-center gap-2 text-sm font-medium ${overdueState ? "text-destructive" : "text-gold"}`}
-            >
-              <Clock className="h-4 w-4 shrink-0" />
-              {formatTime12(t.due_time)}
-              {t.recurring && <Repeat2 className="h-4 w-4 shrink-0" aria-label="Recurring" />}
-            </p>
+            {(t.due_time || t.recurring) && (
+              <p
+                className={`mb-1.5 flex items-center gap-2 text-sm font-medium ${overdueState ? "text-destructive" : "text-gold"}`}
+              >
+                {t.due_time && <Clock className="h-4 w-4 shrink-0" />}
+                {t.due_time && formatTime12(t.due_time)}
+                {t.recurring && <Repeat2 className="h-4 w-4 shrink-0" aria-label="Recurring" />}
+              </p>
+            )}
             <h3
               className={`break-words font-medium ${t.status === "done" ? "text-muted-foreground" : ""}`}
             >
