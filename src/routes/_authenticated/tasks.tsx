@@ -30,6 +30,7 @@ import {
 import {
   BOARD_BLOCKS,
   blockForTime,
+  effectiveBlock,
   currentBlock,
   msToNextMinute,
   timeInBlock,
@@ -94,6 +95,7 @@ function Tasks() {
   const [moving, setMoving] = useState<Execution | null>(null);
   const [dragging, setDragging] = useState<Execution | null>(null);
   const [dropBlock, setDropBlock] = useState<string | null>(null);
+  const [dropBefore, setDropBefore] = useState<string | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [deleting, setDeleting] = useState<Execution[]>([]);
   useEffect(() => {
@@ -258,15 +260,33 @@ function Tasks() {
     },
     onError: (error) => toast.error(error.message),
   });
-  const dropTask = (blockId: string) => {
-    const block = blocks.find((b) => b.id === blockId);
-    if (dragging && block && canMoveExecution(dragging, !!me?.isExec)) {
-      const time = timeInBlock(block, dragging, agenda.data ?? []);
-      if (time) move.mutate({ task: dragging, time });
-      else toast.error("This block is full. Choose an exact time.");
-    }
+  const placeTask = async (blockId: string, beforeId: string | null) => {
+    const src = dragging;
     setDragging(null);
     setDropBlock(null);
+    setDropBefore(null);
+    if (!src || !src.scheduled_date || !canMoveExecution(src, !!me?.isExec) || src.id === beforeId) return;
+    const { data: eid, error } = await supabase.rpc("place_task_execution", {
+      _id: src.projected ? "00000000-0000-0000-0000-000000000000" : src.id,
+      _task_id: src.task_id,
+      _occurrence_date: src.occurrence_date ?? src.scheduled_date,
+      _block_id: blockId,
+      ...(beforeId ? { _before_id: beforeId } : {}),
+    });
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    // Persist the full visible order of the target block (block + position, never time).
+    const list = (agenda.data ?? []).filter(
+      (r) => !r.projected && !r.archived_at && r.id !== src.id && r.scheduled_date === src.scheduled_date && effectiveBlock(r, blocks)?.id === blockId,
+    ).sort(compareExecutions);
+    const at = beforeId ? list.findIndex((r) => r.id === beforeId) : -1;
+    const ids = list.map((r) => r.id);
+    ids.splice(at < 0 ? ids.length : at, 0, eid as string);
+    const { error: e2 } = await supabase.rpc("reorder_task_executions", { _ids: ids });
+    if (e2) toast.error(e2.message);
+    qc.invalidateQueries({ queryKey: ["tasks"] });
   };
   const action = useMutation({
     mutationFn: async ({
@@ -313,19 +333,6 @@ function Tasks() {
             : t.status === status)),
     )
     .sort(compareExecutions);
-  const reorderOnto = async (target: Execution) => {
-    const src = dragging;
-    if (!src || src.id === target.id || src.projected || target.projected) return false;
-    if (src.scheduled_date !== target.scheduled_date) return false;
-    const list = rows.filter((r) => !r.projected && r.scheduled_date === target.scheduled_date && r.id !== src.id);
-    list.splice(list.findIndex((r) => r.id === target.id), 0, src);
-    setDragging(null);
-    setDropBlock(null);
-    const { error } = await supabase.rpc("reorder_task_executions", { _ids: list.map((r) => r.id) });
-    if (error) toast.error(error.message);
-    qc.invalidateQueries({ queryKey: ["tasks"] });
-    return true;
-  };
   const eligible = rows.filter((t) => !t.projected && t.status !== "cancelled");
   const isSeries = (t: Execution) => {
     const c = configurations.data?.find((x) => x.id === t.task_id);
@@ -354,17 +361,21 @@ function Tasks() {
       <article
         key={t.id}
         className="min-w-0 rounded-md border bg-card p-2.5"
+        style={dropBefore === t.id ? { boxShadow: "0 -3px 0 0 var(--color-gold)" } : undefined}
         onDragOver={(e) => {
-          if (dragging && dragging.id !== t.id && dragging.scheduled_date === t.scheduled_date && !t.projected && !dragging.projected) {
+          if (dragging && dragging.id !== t.id && dragging.scheduled_date === t.scheduled_date && !t.projected) {
             e.preventDefault();
             e.stopPropagation();
+            setDropBefore(t.id);
+            setDropBlock(effectiveBlock(t, blocks)?.id ?? null);
           }
         }}
         onDrop={(e) => {
-          if (dragging && dragging.id !== t.id && dragging.scheduled_date === t.scheduled_date && !t.projected && !dragging.projected) {
+          if (dragging && dragging.id !== t.id && dragging.scheduled_date === t.scheduled_date && !t.projected) {
             e.preventDefault();
             e.stopPropagation();
-            void reorderOnto(t);
+            const b = effectiveBlock(t, blocks);
+            if (b) void placeTask(b.id, t.id);
           }
         }}
       >
@@ -385,6 +396,7 @@ function Tasks() {
               onDragEnd={() => {
                 setDragging(null);
                 setDropBlock(null);
+                setDropBefore(null);
               }}
             >
               <GripVertical className="h-4 w-4" />
@@ -728,7 +740,7 @@ function Tasks() {
           <div className="grid min-w-0 gap-5 md:grid-cols-2 xl:grid-cols-3">
             {blocks.map((block) => {
               const blockRows = todayRows.filter(
-                (t) => blockForTime(t.due_time, blocks)?.id === block.id,
+                (t) => effectiveBlock(t, blocks)?.id === block.id,
               );
               const current = date === agencyDate(now) && currentBlock(now, blocks)?.id === block.id;
               return (
@@ -742,6 +754,7 @@ function Tasks() {
                       e.preventDefault();
                       e.dataTransfer.dropEffect = "move";
                       setDropBlock(block.id);
+                      setDropBefore(null);
                     }
                   }}
                   onDragLeave={(e) => {
@@ -749,7 +762,7 @@ function Tasks() {
                   }}
                   onDrop={(e) => {
                     e.preventDefault();
-                    dropTask(block.id);
+                    void placeTask(block.id, null);
                   }}
                 >
                   <header className="mb-3 grid grid-cols-[minmax(0,1fr)_auto] gap-2">
@@ -778,15 +791,6 @@ function Tasks() {
               );
             })}
           </div>
-          {todayRows.some((t) => t.due_time && !blockForTime(t.due_time, blocks)) &&
-            section(
-              "Unscheduled Hours",
-              todayRows.filter((t) => t.due_time && !blockForTime(t.due_time, blocks)),
-            )}
-          {section(
-            "No Time",
-            todayRows.filter((t) => !t.due_time),
-          )}
           {active.some((t) => !t.scheduled_date) &&
             section(
               "No date",

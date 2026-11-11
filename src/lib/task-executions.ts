@@ -2,6 +2,7 @@ export const AGENCY_TIMEZONE = "America/Bogota";
 export type Execution = {
   id: string;
   sort_order?: number | null;
+  block_id?: string | null;
   task_id: string;
   title: string;
   description: string | null;
