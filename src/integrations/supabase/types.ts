@@ -465,6 +465,7 @@ export type Database = {
       task_executions: {
         Row: {
           archived_at: string | null
+          block_id: string | null
           completed_at: string | null
           created_at: string
           creator_id: string | null
@@ -489,6 +490,7 @@ export type Database = {
         }
         Insert: {
           archived_at?: string | null
+          block_id?: string | null
           completed_at?: string | null
           created_at?: string
           creator_id?: string | null
@@ -513,6 +515,7 @@ export type Database = {
         }
         Update: {
           archived_at?: string | null
+          block_id?: string | null
           completed_at?: string | null
           created_at?: string
           creator_id?: string | null
@@ -536,6 +539,13 @@ export type Database = {
           visible_to_creator?: boolean
         }
         Relationships: [
+          {
+            foreignKeyName: "task_executions_block_id_fkey"
+            columns: ["block_id"]
+            isOneToOne: false
+            referencedRelation: "task_time_blocks"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "task_executions_revision_id_fkey"
             columns: ["revision_id"]
@@ -932,6 +942,16 @@ export type Database = {
           _occurrence_date: string
           _task_id: string
           _time: string
+        }
+        Returns: string
+      }
+      place_task_execution: {
+        Args: {
+          _before_id?: string
+          _block_id: string
+          _id: string
+          _occurrence_date: string
+          _task_id: string
         }
         Returns: string
       }
