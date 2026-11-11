@@ -85,3 +85,10 @@ describe("Now indicator timing", () => {
     expect(msToNextMinute(new Date("2026-10-25T22:59:45Z"))).toBe(15_050);
   });
 });
+
+import { effectiveBlock as eb } from "./task-board";
+describe("effectiveBlock", () => {
+  it("stored block wins over time", () => expect(eb({ due_time: "07:00", block_id: "night" })?.id).toBe("night"));
+  it("falls back to time", () => expect(eb({ due_time: "07:00", block_id: null })?.id).toBe("morning"));
+  it("no time goes to first block", () => expect(eb({ due_time: null })?.id).toBe("night"));
+});

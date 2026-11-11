@@ -93,3 +93,30 @@ export const reorderTasks = defineTool({
     return ok({ reordered: ids.length, date });
   },
 });
+
+export const placeTask = defineTool({
+  name: "place_task",
+  title: "Move task to block / position",
+  description: "Place one task occurrence (task_id + date) in a time block (name or id), before another task or at the end. Never changes its time or date.",
+  inputSchema: {
+    task_id: z.string().uuid(),
+    date: dateSchema,
+    block: z.string().min(1).describe("Block name (e.g. Morning) or block id."),
+    before_task_id: z.string().uuid().optional().describe("Place above this task; omit to place last."),
+  },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+  handler: async ({ task_id, date, block, before_task_id }, ctx) => {
+    const sb = supabaseForUser(ctx);
+    const { data: blocks, error: be } = await sb.from("task_time_blocks").select("id,label");
+    if (be) fail(be.message);
+    const b = (blocks ?? []).find((x) => x.id === block || x.label.toLowerCase() === block.toLowerCase());
+    if (!b) fail(`Unknown block. Use one of: ${(blocks ?? []).map((x) => x.label).join(", ")}`);
+    const eid = await executionId(sb, task_id, date);
+    const before = before_task_id ? await executionId(sb, before_task_id, date) : undefined;
+    const { error } = await sb.rpc("place_task_execution", {
+      _id: eid, _task_id: task_id, _occurrence_date: date, _block_id: b!.id, ...(before ? { _before_id: before } : {}),
+    });
+    if (error) fail(error.message);
+    return ok({ placed: eid, block: b!.label, date });
+  },
+});
