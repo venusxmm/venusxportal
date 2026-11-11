@@ -517,6 +517,48 @@
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
         "outputSchema": null
+      },
+      {
+        "name": "place_task",
+        "title": "Move task to block / position",
+        "description": "Place one task occurrence (task_id + date) in a time block (name or id), before another task or at the end. Never changes its time or date.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "idempotentHint": true
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "date": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "description": "Date YYYY-MM-DD (America/Bogota)"
+            },
+            "block": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Block name (e.g. Morning) or block id."
+            },
+            "before_task_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Place above this task; omit to place last."
+            }
+          },
+          "required": [
+            "task_id",
+            "date",
+            "block"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
       }
     ]
   }
