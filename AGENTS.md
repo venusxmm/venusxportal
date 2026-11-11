@@ -32,3 +32,5 @@
 - Overview task counts derive from task_agenda executions (same source as Tasks), never the tasks table. Why: trashed/completed/recurring state stays consistent.
 - Task edits update existing executions in place (one-time: same row, cleared date = null; recurring: future pending rows, dropped dates trashed); edits never cancel or reopen, and completion is allowed before the scheduled date. Why: deadlines mark due dates, not eligibility.
 - OnlyMonster import: server-only sync (src/lib/onlymonster.server.ts) upserts revenue rows keyed by source+platform+account+external_ref, voids (archived_at) undo/chargeback rows, never touches manual rows; accounts map to creators explicitly with their own agency %; scheduled via managed HTTP schedule to /api/public/jobs/onlymonster-sync. Why: idempotent, auditable imports with per-contract splits.
+
+- Daily Schedule block = execution.block_id when set, else computed from time; position = sort_order; moves never change due_time (place_task_execution RPC shared by UI and MCP). Why: users control order independent of hours.

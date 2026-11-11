@@ -260,6 +260,13 @@
       "when": 1794273773309,
       "tag": "0036_task_manual_order",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1794360249767,
+      "tag": "0037_task_block_placement",
+      "breakpoints": true
     }
   ]
 }

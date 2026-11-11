@@ -6,7 +6,7 @@ import getTask from "./tools/get-task";
 import createTask from "./tools/create-task";
 import updateTask from "./tools/update-task";
 import { completeTask, reopenTask } from "./tools/complete-task";
-import { listTrash, reorderTasks, restoreTask, trashTask } from "./tools/trash";
+import { listTrash, placeTask, reorderTasks, restoreTask, trashTask } from "./tools/trash";
 
 const projectRef = import.meta.env["VITE_SUPABASE_PROJECT_ID"] ?? "project-ref-unset";
 
@@ -21,5 +21,5 @@ export default defineMcp({
     issuer: `https://${projectRef}.supabase.co/auth/v1`,
     acceptedAudiences: "authenticated",
   }),
-  tools: [dashboard, activity, listTasks, getTask, createTask, updateTask, completeTask, reopenTask, trashTask, listTrash, restoreTask, reorderTasks],
+  tools: [dashboard, activity, listTasks, getTask, createTask, updateTask, completeTask, reopenTask, trashTask, listTrash, restoreTask, reorderTasks, placeTask],
 });

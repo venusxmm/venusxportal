@@ -48,6 +48,10 @@ export const titleCase = (value: string) =>
 export function blockForTime(time: string | null, blocks: BoardBlock[] = BOARD_BLOCKS) {
   return time ? blocks.find((b) => inBlock(b, time.slice(0, 5))) : undefined;
 }
+/** Stored block wins; otherwise the block containing the task's time; otherwise the first block. */
+export function effectiveBlock(task: Pick<Execution, "due_time"> & { block_id?: string | null }, blocks: BoardBlock[] = BOARD_BLOCKS) {
+  return (task.block_id && blocks.find((b) => b.id === task.block_id)) || blockForTime(task.due_time, blocks) || blocks[0];
+}
 export function currentBlock(now = new Date(), blocks: BoardBlock[] = BOARD_BLOCKS) {
   return blockForTime(
     new Intl.DateTimeFormat("en-GB", {
