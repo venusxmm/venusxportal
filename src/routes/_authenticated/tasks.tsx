@@ -593,6 +593,7 @@ function Tasks() {
           )}
         </div>
       </article>
+      </DropZone>
     );
   };
   const section = (title: string, tasks: Execution[]) => (
@@ -815,10 +816,23 @@ function Tasks() {
         </div>
       ) : (
         <div className="space-y-7">
+          <DndContext
+            sensors={sensors}
+            autoScroll={{ threshold: { x: 0, y: 0.15 }, acceleration: 12 }}
+            onDragStart={(e) => setDragging(active.find((r) => r.id === String(e.active.id)) ?? null)}
+            onDragOver={onDragOver}
+            onDragEnd={onDragEnd}
+            onDragCancel={() => {
+              setDragging(null);
+              setDropBlock(null);
+              setDropBefore(null);
+            }}
+          >
           <div className="grid min-w-0 gap-5 md:grid-cols-2 xl:grid-cols-3">
             {blocks.map((block) => {
-              const blockRows = todayRows.filter(
-                (t) => effectiveBlock(t, blocks)?.id === block.id,
+              const blockRows = orderBlock(
+                todayRows.filter((t) => effectiveBlock(t, blocks)?.id === block.id),
+                modeOf(block.id),
               );
               const current = date === agencyDate(now) && currentBlock(now, blocks)?.id === block.id;
               return (
@@ -827,21 +841,6 @@ function Tasks() {
                   aria-label={`${block.label} time block`}
                   data-block={block.id}
                   className={`min-w-0 border-t-2 pt-3 ${current || dropBlock === block.id ? "border-gold" : "border-border"}`}
-                  onDragOver={(e) => {
-                    if (dragging) {
-                      e.preventDefault();
-                      e.dataTransfer.dropEffect = "move";
-                      setDropBlock(block.id);
-                      setDropBefore(null);
-                    }
-                  }}
-                  onDragLeave={(e) => {
-                    if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropBlock(null);
-                  }}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    void placeTask(block.id, null);
-                  }}
                 >
                   <header className="mb-3 grid grid-cols-[minmax(0,1fr)_auto] gap-2">
                     <div>
@@ -853,10 +852,26 @@ function Tasks() {
                         {formatTime12(block.start)}–{formatTime12(block.end)}
                       </p>
                     </div>
-                    <span className="text-sm text-muted-foreground">{blockRows.length}</span>
+                    <div className="flex items-center gap-1">
+                      {me?.isExec ? (
+                        <Select value={modeOf(block.id)} onValueChange={(v) => void setMode(block.id, v as SortMode)}>
+                          <SelectTrigger className="h-7 w-auto gap-1 px-2 text-xs" aria-label={`${block.label} order`}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {SORT_MODES.map((m) => (
+                              <SelectItem key={m} value={m}>{m === "time" ? "By Time" : m === "priority" ? "By Priority" : "Manual"}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : null}
+                      <span className="text-sm text-muted-foreground">{blockRows.length}</span>
+                    </div>
                   </header>
-                  <div
-                    className={`min-h-24 space-y-2 ${dragging ? "rounded-md border border-dashed border-gold p-2" : ""}`}
+                  <DropZone
+                    id={`block:${block.id}`}
+                    disabled={!dragging}
+                    className={`min-h-24 space-y-2 ${dragging ? `rounded-md border border-dashed p-2 ${dropBlock === block.id && !dropBefore ? "border-gold bg-gold/5" : "border-gold/40"}` : ""}`}
                   >
                     {blockRows.map(renderCard)}
                     {!blockRows.length && (
@@ -864,11 +879,12 @@ function Tasks() {
                         {dragging ? "Drop Here" : "No Tasks"}
                       </p>
                     )}
-                  </div>
+                  </DropZone>
                 </section>
               );
             })}
           </div>
+          </DndContext>
           {active.some((t) => !t.scheduled_date) &&
             section(
               "No date",
@@ -1872,5 +1888,31 @@ function TimeBlocksDialog({ blocks, onClose }: { blocks: BoardBlock[]; onClose: 
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function DropZone({ id, disabled, className, children }: { id: string; disabled?: boolean; className?: string; children: React.ReactNode }) {
+  const { setNodeRef } = useDroppable({ id, disabled });
+  return (
+    <div ref={setNodeRef} className={className}>
+      {children}
+    </div>
+  );
+}
+
+function DragGrip({ id, label }: { id: string; label: string }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id });
+  return (
+    <button
+      ref={setNodeRef}
+      type="button"
+      {...attributes}
+      {...listeners}
+      aria-label={`Drag ${label}`}
+      title="Drag to reorder or move to another block"
+      className={`inline-flex h-8 w-8 touch-none items-center justify-center rounded-md hover:bg-accent ${isDragging ? "cursor-grabbing opacity-50" : "cursor-grab"}`}
+    >
+      <GripVertical className="h-4 w-4" />
+    </button>
   );
 }
