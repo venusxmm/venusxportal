@@ -90,3 +90,20 @@ export function timeInBlock(block: BoardBlock, task: Execution, rows: Execution[
   }
   return null;
 }
+
+export type SortMode = "manual" | "time" | "priority";
+export const SORT_MODES: SortMode[] = ["manual", "time", "priority"];
+export const PRIORITY_RANK: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+const manualKey = (a: Execution, b: Execution) =>
+  (a.sort_order ?? 1e9) - (b.sort_order ?? 1e9) ||
+  (a.due_time ?? "24:00").localeCompare(b.due_time ?? "24:00") ||
+  a.title.localeCompare(b.title);
+/** Shared block ordering (UI + MCP). Time/priority modes fall back to manual order for ties and untimed tasks. */
+export function orderBlock<T extends Execution>(rows: T[], mode: SortMode = "manual"): T[] {
+  const list = [...rows];
+  if (mode === "time")
+    return list.sort((a, b) => (a.due_time ? 0 : 1) - (b.due_time ? 0 : 1) || (a.due_time && b.due_time ? a.due_time.localeCompare(b.due_time) : 0) || manualKey(a, b));
+  if (mode === "priority")
+    return list.sort((a, b) => (PRIORITY_RANK[a.priority] ?? 9) - (PRIORITY_RANK[b.priority] ?? 9) || manualKey(a, b));
+  return list.sort(manualKey);
+}
