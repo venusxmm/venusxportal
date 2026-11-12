@@ -390,7 +390,7 @@ function Tasks() {
     const list = blockList(t).filter((r) => !r.projected || r.id === t.id);
     const i = list.findIndex((r) => r.id === t.id);
     if (!b || i < 0) return;
-    if (dir === -1 && i > 0) void placeTask(t, b.id, list[i - 1].id);
+    if (dir === -1 && i > 0) void placeTask(t, b.id, list[i - 1]?.id ?? null);
     if (dir === 1 && i < list.length - 1) void placeTask(t, b.id, list[i + 2]?.id ?? null);
   };
   const setPriority2 = async (t: Execution, value: string) => {
@@ -398,7 +398,7 @@ function Tasks() {
       _id: t.projected ? "00000000-0000-0000-0000-000000000000" : t.id,
       _task_id: t.task_id,
       _occurrence_date: t.occurrence_date ?? t.scheduled_date ?? agencyDate(now),
-      _priority: value as Execution["priority"],
+      _priority: value as Database["public"]["Enums"]["task_priority"],
     });
     if (error) toast.error(error.message);
     qc.invalidateQueries({ queryKey: ["tasks"] });
@@ -452,7 +452,7 @@ function Tasks() {
               <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={`Move ${t.title} down`} onClick={() => nudge(t, 1)}>
                 <ChevronDown className="h-4 w-4" />
               </Button>
-              <Select value={effectiveBlock(t, blocks)?.id} onValueChange={(v) => void placeTask(t, v, null)}>
+              <Select value={effectiveBlock(t, blocks)?.id ?? ""} onValueChange={(v) => void placeTask(t, v, null)}>
                 <SelectTrigger className="h-8 w-auto gap-1 border-0 px-2 text-xs" aria-label={`Move ${t.title} to block`}>
                   <SelectValue />
                 </SelectTrigger>
@@ -1892,7 +1892,7 @@ function TimeBlocksDialog({ blocks, onClose }: { blocks: BoardBlock[]; onClose: 
 }
 
 function DropZone({ id, disabled, className, children }: { id: string; disabled?: boolean; className?: string; children: React.ReactNode }) {
-  const { setNodeRef } = useDroppable({ id, disabled });
+  const { setNodeRef } = useDroppable({ id, disabled: !!disabled });
   return (
     <div ref={setNodeRef} className={className}>
       {children}
