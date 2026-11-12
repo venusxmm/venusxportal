@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { compareExecutions, type Execution } from "./task-executions";
-const e = (o: Partial<Execution>) => ({ id: "x", task_id: "t", title: "A", scheduled_date: "2026-11-10", due_time: null, ...o }) as Execution;
-describe("manual task order", () => {
-  it("manual order beats time", () => {
-    const rows = [e({ id: "a", due_time: "06:00", sort_order: 2 }), e({ id: "b", due_time: "15:00", sort_order: 1 })].sort(compareExecutions);
-    expect(rows.map((r) => r.id)).toEqual(["b", "a"]);
-  });
-  it("unordered tasks fall back to time", () => {
-    const rows = [e({ id: "a", due_time: "15:00" }), e({ id: "b", due_time: "06:00" })].sort(compareExecutions);
-    expect(rows.map((r) => r.id)).toEqual(["b", "a"]);
-  });
+import { orderBlock } from "./task-board";
+import type { Execution } from "./task-executions";
+const r = (id: string, sort_order: number | null, due_time: string | null, priority: string) =>
+  ({ id, title: id, sort_order, due_time, priority }) as unknown as Execution;
+const rows = [r("a", 1, "15:00", "low"), r("b", 2, null, "high"), r("c", 3, "09:00", "high"), r("d", 4, null, "critical")];
+describe("orderBlock", () => {
+  it("manual follows saved position", () => expect(orderBlock(rows).map((x) => x.id)).toEqual(["a", "b", "c", "d"]));
+  it("time: earliest first, untimed after in manual order", () =>
+    expect(orderBlock(rows, "time").map((x) => x.id)).toEqual(["c", "a", "b", "d"]));
+  it("priority: critical>high>low, ties keep manual order", () =>
+    expect(orderBlock(rows, "priority").map((x) => x.id)).toEqual(["d", "b", "c", "a"]));
 });
