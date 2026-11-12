@@ -631,6 +631,7 @@ export type Database = {
           id: string
           label: string
           position: number
+          sort_mode: string
           start_time: string
         }
         Insert: {
@@ -639,6 +640,7 @@ export type Database = {
           id?: string
           label: string
           position?: number
+          sort_mode?: string
           start_time: string
         }
         Update: {
@@ -647,6 +649,7 @@ export type Database = {
           id?: string
           label?: string
           position?: number
+          sort_mode?: string
           start_time?: string
         }
         Relationships: []
@@ -992,6 +995,15 @@ export type Database = {
       }
       save_task_configuration: {
         Args: { _config: Json; _task_id: string }
+        Returns: string
+      }
+      set_execution_priority: {
+        Args: {
+          _id: string
+          _occurrence_date: string
+          _priority: Database["public"]["Enums"]["task_priority"]
+          _task_id: string
+        }
         Returns: string
       }
       task_agenda: { Args: { _date: string }; Returns: Json }
