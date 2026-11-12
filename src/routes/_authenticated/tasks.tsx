@@ -13,7 +13,21 @@ import {
   ArrowRightLeft,
   Trash2,
   Pencil,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
+import {
+  DndContext,
+  PointerSensor,
+  TouchSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  useDraggable,
+  useDroppable,
+  type DragEndEvent,
+  type DragOverEvent,
+} from "@dnd-kit/core";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { compareExecutions } from "@/lib/task-executions";
@@ -37,6 +51,9 @@ import {
   canMoveExecution,
   titleCase,
   validateBlocks,
+  orderBlock,
+  SORT_MODES,
+  type SortMode,
   type BoardBlock,
 } from "@/lib/task-board";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -128,7 +145,7 @@ function Tasks() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("task_time_blocks")
-        .select("id,label,start_time,end_time,position")
+        .select("id,label,start_time,end_time,position,sort_mode")
         .order("position");
       if (error) throw error;
       return data;
@@ -142,6 +159,18 @@ function Tasks() {
         end: b.end_time.slice(0, 5) === "00:00" ? "24:00" : b.end_time.slice(0, 5),
       }))
     : BOARD_BLOCKS;
+  const modeOf = (id: string): SortMode => (blockRows.data?.find((b) => b.id === id)?.sort_mode as SortMode) ?? "manual";
+  const setMode = async (id: string, mode: SortMode) => {
+    if (modeOf(id) === mode) return;
+    const { error } = await supabase.from("task_time_blocks").update({ sort_mode: mode }).eq("id", id);
+    if (error) toast.error(error.message);
+    qc.invalidateQueries({ queryKey: ["tasks", "time-blocks"] });
+  };
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
+    useSensor(KeyboardSensor),
+  );
   const [editingBlocks, setEditingBlocks] = useState(false);
   const configurations = useQuery({
     queryKey: ["tasks", "configurations"],
@@ -260,8 +289,7 @@ function Tasks() {
     },
     onError: (error) => toast.error(error.message),
   });
-  const placeTask = async (blockId: string, beforeId: string | null) => {
-    const src = dragging;
+  const placeTask = async (src: Execution | null, blockId: string, beforeId: string | null) => {
     setDragging(null);
     setDropBlock(null);
     setDropBefore(null);
@@ -280,12 +308,15 @@ function Tasks() {
     // Persist the full visible order of the target block (block + position, never time).
     const list = (agenda.data ?? []).filter(
       (r) => !r.projected && !r.archived_at && r.id !== src.id && r.scheduled_date === src.scheduled_date && effectiveBlock(r, blocks)?.id === blockId,
-    ).sort(compareExecutions);
-    const at = beforeId ? list.findIndex((r) => r.id === beforeId) : -1;
-    const ids = list.map((r) => r.id);
+    );
+    const ordered = orderBlock(list, modeOf(blockId));
+    const at = beforeId ? ordered.findIndex((r) => r.id === beforeId) : -1;
+    const ids = ordered.map((r) => r.id);
     ids.splice(at < 0 ? ids.length : at, 0, eid as string);
     const { error: e2 } = await supabase.rpc("reorder_task_executions", { _ids: ids });
     if (e2) toast.error(e2.message);
+    // A manual move in an automatic block switches that block to Manual, keeping what the user saw.
+    if (!e2 && modeOf(blockId) !== "manual") await setMode(blockId, "manual");
     qc.invalidateQueries({ queryKey: ["tasks"] });
   };
   const action = useMutation({
@@ -350,6 +381,54 @@ function Tasks() {
       : people.data?.find((p) => p.id === id)?.full_name ||
         people.data?.find((p) => p.id === id)?.email ||
         (id ? "Assigned member" : "Unassigned");
+  const blockList = (t: Execution) => {
+    const b = effectiveBlock(t, blocks);
+    return b ? orderBlock(active.filter((r) => r.scheduled_date === t.scheduled_date && effectiveBlock(r, blocks)?.id === b.id), modeOf(b.id)) : [];
+  };
+  const nudge = (t: Execution, dir: -1 | 1) => {
+    const b = effectiveBlock(t, blocks);
+    const list = blockList(t).filter((r) => !r.projected || r.id === t.id);
+    const i = list.findIndex((r) => r.id === t.id);
+    if (!b || i < 0) return;
+    if (dir === -1 && i > 0) void placeTask(t, b.id, list[i - 1].id);
+    if (dir === 1 && i < list.length - 1) void placeTask(t, b.id, list[i + 2]?.id ?? null);
+  };
+  const setPriority2 = async (t: Execution, value: string) => {
+    const { error } = await supabase.rpc("set_execution_priority", {
+      _id: t.projected ? "00000000-0000-0000-0000-000000000000" : t.id,
+      _task_id: t.task_id,
+      _occurrence_date: t.occurrence_date ?? t.scheduled_date ?? agencyDate(now),
+      _priority: value as Execution["priority"],
+    });
+    if (error) toast.error(error.message);
+    qc.invalidateQueries({ queryKey: ["tasks"] });
+  };
+  const onDragOver = (e: DragOverEvent) => {
+    const id = String(e.over?.id ?? "");
+    if (id.startsWith("card:")) {
+      const t = active.find((r) => r.id === id.slice(5));
+      setDropBefore(t?.id ?? null);
+      setDropBlock(t ? (effectiveBlock(t, blocks)?.id ?? null) : null);
+    } else if (id.startsWith("block:")) {
+      setDropBefore(null);
+      setDropBlock(id.slice(6));
+    } else {
+      setDropBefore(null);
+      setDropBlock(null);
+    }
+  };
+  const onDragEnd = (e: DragEndEvent) => {
+    const src = active.find((r) => r.id === String(e.active.id)) ?? null;
+    const id = String(e.over?.id ?? "");
+    if (id.startsWith("card:")) {
+      const t = active.find((r) => r.id === id.slice(5));
+      const b = t && effectiveBlock(t, blocks);
+      if (t && b && t.scheduled_date === src?.scheduled_date) return void placeTask(src, b.id, t.id);
+    } else if (id.startsWith("block:")) return void placeTask(src, id.slice(6), null);
+    setDragging(null);
+    setDropBlock(null);
+    setDropBefore(null);
+  };
   const renderCard = (t: Execution) => {
     const allowed =
       !!me &&
@@ -358,49 +437,32 @@ function Tasks() {
       (canExecute(t, me.id, me.isExec) || !!t.visible_to_creator);
     const overdueState = executionOverdue(t, now);
     return (
+      <DropZone key={t.id} id={`card:${t.id}`} disabled={!dragging || dragging.id === t.id || !!t.projected}>
       <article
-        key={t.id}
         className="min-w-0 rounded-md border bg-card p-2.5"
         style={dropBefore === t.id ? { boxShadow: "0 -3px 0 0 var(--color-gold)" } : undefined}
-        onDragOver={(e) => {
-          if (dragging && dragging.id !== t.id && dragging.scheduled_date === t.scheduled_date && !t.projected) {
-            e.preventDefault();
-            e.stopPropagation();
-            setDropBefore(t.id);
-            setDropBlock(effectiveBlock(t, blocks)?.id ?? null);
-          }
-        }}
-        onDrop={(e) => {
-          if (dragging && dragging.id !== t.id && dragging.scheduled_date === t.scheduled_date && !t.projected) {
-            e.preventDefault();
-            e.stopPropagation();
-            const b = effectiveBlock(t, blocks);
-            if (b) void placeTask(b.id, t.id);
-          }
-        }}
       >
         <div className="mb-2 flex items-center justify-between gap-2">
           {canMoveExecution(t, !!me?.isExec) && t.scheduled_date ? (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 cursor-grab"
-              aria-label={`Drag ${t.title}`}
-              title="Drag to a time block or choose Move"
-              draggable
-              onDragStart={(e) => {
-                e.dataTransfer.setData("text/plain", t.id);
-                e.dataTransfer.effectAllowed = "move";
-                setDragging(t);
-              }}
-              onDragEnd={() => {
-                setDragging(null);
-                setDropBlock(null);
-                setDropBefore(null);
-              }}
-            >
-              <GripVertical className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-0.5">
+              <DragGrip id={t.id} label={t.title} />
+              <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={`Move ${t.title} up`} onClick={() => nudge(t, -1)}>
+                <ChevronUp className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={`Move ${t.title} down`} onClick={() => nudge(t, 1)}>
+                <ChevronDown className="h-4 w-4" />
+              </Button>
+              <Select value={effectiveBlock(t, blocks)?.id} onValueChange={(v) => void placeTask(t, v, null)}>
+                <SelectTrigger className="h-8 w-auto gap-1 border-0 px-2 text-xs" aria-label={`Move ${t.title} to block`}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {blocks.map((b) => (
+                    <SelectItem key={b.id} value={b.id}>{b.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           ) : (
             <span />
           )}
@@ -433,6 +495,22 @@ function Tasks() {
             <p className="mt-1 text-xs text-muted-foreground">
               {t.scheduled_date || "No date"} · {who(t.owner_id)}
             </p>
+            <div className="mt-1.5">
+              {canMoveExecution(t, !!me?.isExec) && t.status === "pending" ? (
+                <Select value={t.priority} onValueChange={(v) => void setPriority2(t, v)}>
+                  <SelectTrigger className="h-7 w-auto gap-1 px-2 text-xs uppercase" aria-label={`Priority of ${t.title}`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {["critical", "high", "medium", "low"].map((p) => (
+                      <SelectItem key={p} value={p}>{titleCase(p)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Pill value={t.priority} label={titleCase(t.priority)} />
+              )}
+            </div>
           </div>
           <Pill
             value={overdueState ? "overdue" : t.status}
