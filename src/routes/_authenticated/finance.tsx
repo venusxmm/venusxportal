@@ -8,8 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { useMe } from "@/lib/me";
 import { postCreatorPayout } from "@/lib/payout.functions";
-import { bogotaDate, periodRange, type Period } from "@/lib/onlymonster";
-import { OnlyMonsterPanel } from "@/components/onlymonster-panel";
+import { bogotaDate, periodRange, type Period } from "@/lib/periods";
 import {
   DEFAULT_AGENCY_SHARE_PCT,
   inRange,
@@ -170,7 +169,6 @@ function Finance() {
         subtitle="Every figure is computed from ledger entries below. Currencies are never combined."
         actions={<NewTxn creators={creators.data ?? []} />}
       />
-      <OnlyMonsterPanel creators={creators.data ?? []} />
       <div className="mb-3 flex flex-wrap gap-2">
         {PERIODS.map(([p, label]) => (
           <Button
@@ -343,8 +341,7 @@ function Finance() {
                         <span className="text-muted-foreground">Manual</span>
                       ) : (
                         <span className="text-gold">
-                          Imported · OnlyMonster
-                          {t.external_status ? ` · ${t.external_status === "loading" ? "pending" : t.external_status}` : ""}
+                          Imported
                           {t.archived_at ? " · voided" : ""}
                         </span>
                       )}
