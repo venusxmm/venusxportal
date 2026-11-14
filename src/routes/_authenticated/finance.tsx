@@ -101,7 +101,7 @@ function Finance() {
   const { data: me } = useMe();
   const qc = useQueryClient();
   const today = useBogotaToday();
-  const [period, setPeriod] = useState<Period>("today");
+  const [period, setPeriod] = useState<Period>("month");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const range = period === "custom" ? { from: customFrom, to: customTo } : periodRange(period, today);
