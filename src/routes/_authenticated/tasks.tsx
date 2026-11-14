@@ -31,6 +31,7 @@ import {
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { compareExecutions } from "@/lib/task-executions";
+import { groupHistory } from "@/lib/task-history";
 import type { Database } from "@/integrations/supabase/types";
 import { useMe } from "@/lib/me";
 import {
@@ -1086,9 +1087,18 @@ function ExecutionDetails({
         .eq("execution_id", task.id)
         .order("created_at");
       if (error) throw error;
-      return data;
+      const ids = [...new Set(data.map((e) => e.actor_id).filter(Boolean))] as string[];
+      const names: Record<string, string> = {};
+      if (ids.length) {
+        const { data: people } = await supabase.from("profiles").select("id,full_name,nickname,email").in("id", ids);
+        for (const p of people ?? []) names[p.id] = p.nickname || p.full_name || p.email || "Member";
+      }
+      return { items: groupHistory(data), names, total: data.length };
     },
   });
+  const [showAll, setShowAll] = useState(false);
+  const historyItems = events.data?.items ?? [];
+  const visibleHistory = showAll ? historyItems : historyItems.slice(0, 5);
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[90dvh] min-w-0 overflow-y-auto">
@@ -1167,18 +1177,32 @@ function ExecutionDetails({
             <h3 className="mb-3 font-medium">Comments & History</h3>
             {events.error && <ErrorNote error={events.error} />}
             <ol className="space-y-3">
-              {(events.data ?? []).map((e) => (
-                <li key={e.id} className="border-l-2 border-gold-soft pl-3">
-                  <p className="whitespace-pre-wrap break-words text-sm">
-                    {e.action === "comment" ? e.body : titleCase(e.action)}
-                    {e.action !== "comment" && e.body ? ` · ${eventBody(e.action, e.body)}` : ""}
+              {visibleHistory.map((item) => (
+                <li
+                  key={item.id}
+                  className={`border-l-2 pl-3 ${item.kind === "comment" ? "border-gold" : "border-gold-soft"}`}
+                >
+                  <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                    {item.kind === "comment" ? "Comment" : item.kind === "edit" ? "Edit" : "Status"}
+                  </span>
+                  {item.events.map((e) => (
+                    <p key={e.id} className="whitespace-pre-wrap break-words text-sm">
+                      {e.action === "comment" ? e.body : titleCase(e.action)}
+                      {e.action !== "comment" && e.body ? ` · ${eventBody(e.action, e.body)}` : ""}
+                    </p>
+                  ))}
+                  <p className="text-xs text-muted-foreground">
+                    {item.actor_id ? `${events.data?.names[item.actor_id] ?? "Member"} · ` : ""}
+                    <time>{new Date(item.created_at).toLocaleString("en", { timeZone: "America/Bogota" })}</time>
                   </p>
-                  <time className="text-xs text-muted-foreground">
-                    {new Date(e.created_at).toLocaleString("en", { timeZone: "America/Bogota" })}
-                  </time>
                 </li>
               ))}
             </ol>
+            {historyItems.length > 5 && (
+              <Button variant="ghost" size="sm" className="mt-2" onClick={() => setShowAll(!showAll)}>
+                {showAll ? "Show recent only" : `Show full history (${historyItems.length})`}
+              </Button>
+            )}
             {allowed && (
               <form
                 className="mt-4 space-y-2"
