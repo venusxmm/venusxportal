@@ -194,8 +194,9 @@ function Portal() {
           <p className={t.status === "done" ? "text-muted-foreground line-through" : ""}>
             {t.title}
           </p>
+          {deadlineBadge(t)}
           <p className={"mt-1 text-xs " + (late ? "text-destructive" : "text-muted-foreground")}>
-            {t.scheduled_date ?? "No date"} · {formatTime12(t.due_time)}
+            {formatTime12(t.due_time)}
             {t.recurring ? ` · ${recurrenceLabel(t.recurrence ?? "daily", t.weekdays ?? [])}` : ""}
             {" · "}
             <span className={late ? "" : "text-gold"}>{portalStatus(t)}</span>
