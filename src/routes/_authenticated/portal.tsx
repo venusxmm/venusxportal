@@ -156,6 +156,35 @@ function Portal() {
   const completed = ts.filter((t) => ["done", "skipped"].includes(t.status));
   const pct = ts.length ? Math.round((completed.length / ts.length) * 100) : 0;
   const s = summarize(fin.data ?? []);
+  const deadlineBadge = (t: Execution) => {
+    if (!t.scheduled_date) return null;
+    const days = Math.round(
+      (Date.parse(t.scheduled_date + "T00:00:00Z") - Date.parse(today + "T00:00:00Z")) / 86400000,
+    );
+    const readable = new Date(t.scheduled_date + "T00:00:00Z").toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      timeZone: "UTC",
+    });
+    const [dot, rel, tone] =
+      days < 0
+        ? ["🔴", `Overdue by ${-days} day${days === -1 ? "" : "s"}`, "border-destructive/50 text-destructive"]
+        : days === 0
+          ? ["🟠", "Today", "border-gold/60 text-gold"]
+          : [
+              "🟢",
+              days === 1 ? "Tomorrow" : `In ${days} days`,
+              "border-border text-muted-foreground",
+            ];
+    return (
+      <span
+        className={`mt-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-medium ${tone}`}
+      >
+        <span aria-hidden>{dot}</span>
+        {readable} · {rel}
+      </span>
+    );
+  };
   const card = (t: Execution & { recurrence?: string; weekdays?: number[] }) => {
     const late = executionOverdue(t);
     const future = !!t.scheduled_date && t.scheduled_date > today;
