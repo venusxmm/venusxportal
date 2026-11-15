@@ -1006,6 +1006,7 @@ export type Database = {
         }
         Returns: string
       }
+      sync_my_portal_notifications: { Args: never; Returns: number }
       task_agenda: { Args: { _date: string }; Returns: Json }
       task_execution_action: {
         Args: { _action: string; _body?: string; _id: string }
