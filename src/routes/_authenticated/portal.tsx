@@ -19,6 +19,8 @@ import {
 } from "@/lib/task-executions";
 import { Progress } from "@/components/ui/progress";
 import { useEffect } from "react";
+import { NotificationsBell } from "@/components/notifications-bell";
+import { deadlineLabel } from "@/lib/portal-deadline";
 import { msToNextMinute } from "@/lib/task-board";
 
 export const Route = createFileRoute("/_authenticated/portal")({
@@ -141,8 +143,8 @@ function Portal() {
   if (!cid)
     return (
       <EmptyState
-        title="No creator profile linked"
-        body="If you accepted a Creator invitation, confirm that your email is verified and matches one active Creator profile. Otherwise, ask an Executive to verify the Creator email and invitation. Access is not granted until the association is confirmed."
+        title="No hay un perfil de creadora vinculado"
+        body="Si aceptaste una invitación, confirma que tu correo esté verificado y coincida con tu perfil. Si no, pide a la agencia que revise tu invitación."
       />
     );
   const today = agencyDate();
@@ -156,73 +158,83 @@ function Portal() {
   const completed = ts.filter((t) => ["done", "skipped"].includes(t.status));
   const pct = ts.length ? Math.round((completed.length / ts.length) * 100) : 0;
   const s = summarize(fin.data ?? []);
-  const deadlineBadge = (t: Execution) => {
-    if (!t.scheduled_date) return null;
-    const days = Math.round(
-      (Date.parse(t.scheduled_date + "T00:00:00Z") - Date.parse(today + "T00:00:00Z")) / 86400000,
-    );
-    const readable = new Date(t.scheduled_date + "T00:00:00Z").toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      timeZone: "UTC",
-    });
-    const [dot, rel, tone] =
-      days < 0
-        ? ["🔴", `Overdue by ${-days} day${days === -1 ? "" : "s"}`, "border-destructive/50 text-destructive"]
-        : days === 0
-          ? ["🟠", "Today", "border-gold/60 text-gold"]
-          : [
-              "🟢",
-              days === 1 ? "Tomorrow" : `In ${days} days`,
-              "border-border text-muted-foreground",
-            ];
-    return (
-      <span
-        className={`mt-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-medium ${tone}`}
-      >
-        <span aria-hidden>{dot}</span>
-        {readable} · {rel}
-      </span>
-    );
-  };
+  const statusEs = (t: Execution) =>
+    ({ Completed: "Completada", Skipped: "Omitida", Overdue: "Vencida", Pending: "Pendiente" })[
+      portalStatus(t)
+    ] ?? portalStatus(t);
   const card = (t: Execution & { recurrence?: string; weekdays?: number[] }) => {
     const late = executionOverdue(t);
-    const future = !!t.scheduled_date && t.scheduled_date > today;
+    const done = t.status === "done";
+    const dl = t.scheduled_date ? deadlineLabel(t.scheduled_date, today) : null;
+    const dot = done
+      ? "bg-muted-foreground"
+      : dl?.tone === "late" || late
+        ? "bg-destructive"
+        : dl?.tone === "today"
+          ? "bg-gold"
+          : dl?.tone === "soon"
+            ? "bg-warning"
+            : "bg-success";
+    const relTone = done
+      ? "text-muted-foreground"
+      : dl?.tone === "late" || late
+        ? "text-destructive"
+        : dl?.tone === "today"
+          ? "text-gold"
+          : "text-foreground";
+    const rec = t.recurring
+      ? recurrenceLabel(t.recurrence ?? "daily", t.weekdays ?? [])
+          .replace(/Every day|Daily/i, "Todos los días")
+          .replace(/Weekdays/i, "Días seleccionados")
+      : "";
     return (
-      <div key={t.id} className="flex items-start gap-3 rounded-lg border bg-card p-4">
-        <div className="min-w-0 flex-1">
-          <p className={t.status === "done" ? "text-muted-foreground line-through" : ""}>
+      <div
+        key={t.id}
+        className={
+          "flex flex-col gap-3 rounded-lg border bg-card p-4 sm:flex-row sm:items-start " +
+          (late && !done ? "border-l-2 border-l-destructive" : "")
+        }
+      >
+        <div className="min-w-0 flex-1 space-y-2">
+          <p className={"break-words font-medium " + (done ? "text-muted-foreground line-through" : "")}>
             {t.title}
           </p>
-          {deadlineBadge(t)}
-          <p className={"mt-1 text-xs " + (late ? "text-destructive" : "text-muted-foreground")}>
-            {formatTime12(t.due_time)}
-            {t.recurring ? ` · ${recurrenceLabel(t.recurrence ?? "daily", t.weekdays ?? [])}` : ""}
+          {dl && (
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+              <span className={"h-2 w-2 shrink-0 rounded-full " + dot} aria-hidden />
+              <span className="text-foreground">{dl.full}</span>
+              <span className="text-muted-foreground">·</span>
+              <span className={"font-medium " + relTone}>{dl.rel}</span>
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground">
+            {t.due_time ? formatTime12(t.due_time) : "Sin hora"}
+            {rec ? ` · ${rec}` : ""}
             {" · "}
-            <span className={late ? "" : "text-gold"}>{portalStatus(t)}</span>
+            <span className={late && !done ? "text-destructive" : "text-gold"}>{statusEs(t)}</span>
           </p>
-          <details className="mt-1">
-            <summary className="cursor-pointer text-xs text-gold">View Details</summary>
+          <details>
+            <summary className="cursor-pointer text-xs text-gold">Ver detalles</summary>
             <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
-              {t.description || "No description"}
+              {t.description || "Sin descripción"}
             </p>
           </details>
         </div>
         <Button
           size="sm"
-          className="min-h-11"
-          variant={t.status === "done" ? "outline" : "default"}
+          className="min-h-11 w-full shrink-0 sm:w-auto"
+          variant={done ? "outline" : "default"}
           disabled={complete.isPending || t.status === "skipped"}
           onClick={() =>
             complete.mutate({
               id: t.id,
-              done: t.status !== "done",
+              done: !done,
               taskId: t.projected ? t.task_id : undefined,
               date: t.projected ? t.scheduled_date : undefined,
             })
           }
         >
-          {t.status === "done" ? "Undo" : t.status === "skipped" ? "Skipped" : "Complete"}
+          {done ? "Deshacer" : t.status === "skipped" ? "Omitida" : "Completar"}
         </Button>
       </div>
     );
@@ -231,57 +243,61 @@ function Portal() {
   return (
     <div className="mx-auto max-w-2xl">
       <PageHeader
-        title={`Hi, ${profile.data?.stage_name ?? ""}`}
-        subtitle="Your next steps with VenusX."
+        title={`Hola, ${profile.data?.stage_name ?? ""}`}
+        subtitle="Tus próximos pasos con VenusX."
+        actions={<NotificationsBell userId={me.id} />}
       />
       <div className="rounded-lg border bg-card p-5">
         <div className="flex items-center justify-between text-sm">
-          <span>Roadmap progress</span>
+          <span>Progreso</span>
           <span className="text-gold">{pct}%</span>
         </div>
         <Progress value={pct} className="mt-2" />
         {profile.data?.status && (
           <p className="mt-3 text-xs text-muted-foreground">
-            Stage: <span className="capitalize">{profile.data.status}</span>
+            Etapa:{" "}
+            <span>
+              {({ lead: "Prospecto", onboarding: "Incorporación", active: "Activa", paused: "En pausa", offboarded: "Finalizada" } as Record<string, string>)[profile.data.status] ?? profile.data.status}
+            </span>
           </p>
         )}
       </div>
 
       <h2 className="mb-3 mt-8 text-sm uppercase tracking-widest text-muted-foreground">
-        My tasks
+        Mis tareas
       </h2>
       {tasks.isLoading ? (
         <Loading />
       ) : pending.length === 0 ? (
-        <EmptyState title="You're all caught up" />
+        <EmptyState title="¡Estás al día!" />
       ) : (
         <div className="space-y-2">{pending.map(card)}</div>
       )}
       {completed.length > 0 && (
         <details className="mt-4">
           <summary className="cursor-pointer text-sm text-muted-foreground">
-            Completed ({completed.length})
+            Completadas ({completed.length})
           </summary>
           <div className="mt-2 space-y-2">{completed.map(card)}</div>
         </details>
       )}
 
       <h2 className="mb-3 mt-8 text-sm uppercase tracking-widest text-muted-foreground">
-        My earnings
+        Mis ganancias
       </h2>
       {s.length === 0 ? (
         <EmptyState
-          title="Nothing shared yet"
-          body="The agency will share your financial summaries here."
+          title="Aún no hay información"
+          body="La agencia compartirá aquí tus resúmenes financieros."
         />
       ) : (
         s.map((x) => (
           <div key={x.currency} className="grid grid-cols-2 gap-3">
             <Stat
-              label={`Your share · ${x.currency}`}
+              label={`Tu parte · ${x.currency}`}
               value={<span className="text-gold">{money(x.creatorRevenue, x.currency)}</span>}
             />
-            <Stat label="Payouts" value={money(x.payouts, x.currency)} />
+            <Stat label="Pagos" value={money(x.payouts, x.currency)} />
           </div>
         ))
       )}
