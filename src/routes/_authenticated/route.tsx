@@ -36,7 +36,7 @@ type NavItem = {
 };
 const NAV: NavItem[] = [
   { to: "/dashboard", label: "Overview", show: () => true },
-  { to: "/portal", label: "My Portal", show: (m) => m.isCreator },
+  { to: "/portal", label: "Mi Portal", show: (m) => m.isCreator },
   { to: "/creators", label: "Creators", show: (m) => m.isStaff },
   { to: "/tasks", label: "Tasks", show: (m) => !(m.isCreator && !m.isStaff) },
   { to: "/finance", label: "Finance", show: (m) => m.isExec },
