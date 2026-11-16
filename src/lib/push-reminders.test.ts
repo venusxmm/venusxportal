@@ -7,7 +7,7 @@ describe("computeReminders", () => {
   it("sends three spread reminders for a week-long task", () => {
     const r = computeReminders(b("2026-11-02T10:00:00"), b("2026-11-09T10:00:00"));
     expect(r.map((x) => x.n)).toEqual([1, 2, 3]);
-    expect(r[2].at.getTime()).toBe(b("2026-11-09T08:00:00").getTime());
+    expect(r[2]!.at.getTime()).toBe(b("2026-11-09T08:00:00").getTime());
   });
   it("sends only the final reminder when less than 3 hours remain", () => {
     const r = computeReminders(b("2026-11-02T10:00:00"), b("2026-11-02T12:00:00"));
@@ -27,6 +27,6 @@ describe("computeReminders", () => {
   it("keeps reminders at least one hour apart", () => {
     const r = computeReminders(b("2026-11-02T08:00:00"), b("2026-11-03T08:30:00"));
     for (let i = 1; i < r.length; i++)
-      expect(r[i].at.getTime() - r[i - 1].at.getTime()).toBeGreaterThanOrEqual(3600_000);
+      expect(r[i]!.at.getTime() - r[i - 1]!.at.getTime()).toBeGreaterThanOrEqual(3600_000);
   });
 });
