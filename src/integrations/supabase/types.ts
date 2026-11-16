@@ -267,6 +267,33 @@ export type Database = {
           },
         ]
       }
+      notification_preferences: {
+        Row: {
+          enabled: boolean
+          paused_until: string | null
+          quiet_end: number
+          quiet_start: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          enabled?: boolean
+          paused_until?: string | null
+          quiet_end?: number
+          quiet_start?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          enabled?: boolean
+          paused_until?: string | null
+          quiet_end?: number
+          quiet_start?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           body: string | null
@@ -392,6 +419,39 @@ export type Database = {
           nickname?: string | null
           title?: string | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          created_at: string
+          endpoint: string
+          id: string
+          last_ok_at: string | null
+          p256dh: string
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          auth: string
+          created_at?: string
+          endpoint: string
+          id?: string
+          last_ok_at?: string | null
+          p256dh: string
+          user_agent?: string | null
+          user_id?: string
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          endpoint?: string
+          id?: string
+          last_ok_at?: string | null
+          p256dh?: string
+          user_agent?: string | null
+          user_id?: string
         }
         Relationships: []
       }
@@ -979,6 +1039,18 @@ export type Database = {
       purge_tasks: {
         Args: { _confirm_count: number; _ids: string[] }
         Returns: number
+      }
+      push_reminder_candidates: {
+        Args: never
+        Returns: {
+          assigned_at: string
+          deadline: string
+          execution_id: string
+          quiet_end: number
+          quiet_start: number
+          title: string
+          user_id: string
+        }[]
       }
       remove_team_member: { Args: { _user_id: string }; Returns: boolean }
       reorder_task_executions: { Args: { _ids: string[] }; Returns: number }

@@ -27,6 +27,7 @@ import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.
 import { Route as AuthenticatedCreatorsIndexRouteImport } from './routes/_authenticated/creators.index'
 import { Route as AuthenticatedCreatorsIdRouteImport } from './routes/_authenticated/creators.$id'
 import { Route as ApiPublicInvitationsRouteImport } from './routes/api/public/invitations'
+import { Route as ApiPublicJobsPushRemindersRouteImport } from './routes/api/public/jobs/push-reminders'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -119,6 +120,12 @@ const ApiPublicInvitationsRoute = ApiPublicInvitationsRouteImport.update({
   path: '/api/public/invitations',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicJobsPushRemindersRoute =
+  ApiPublicJobsPushRemindersRouteImport.update({
+    id: '/api/public/jobs/push-reminders',
+    path: '/api/public/jobs/push-reminders',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -138,6 +145,7 @@ export interface FileRoutesByFullPath {
   '/creators/$id': typeof AuthenticatedCreatorsIdRoute
   '/api/public/invitations': typeof ApiPublicInvitationsRoute
   '/creators/': typeof AuthenticatedCreatorsIndexRoute
+  '/api/public/jobs/push-reminders': typeof ApiPublicJobsPushRemindersRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -157,6 +165,7 @@ export interface FileRoutesByTo {
   '/creators/$id': typeof AuthenticatedCreatorsIdRoute
   '/api/public/invitations': typeof ApiPublicInvitationsRoute
   '/creators': typeof AuthenticatedCreatorsIndexRoute
+  '/api/public/jobs/push-reminders': typeof ApiPublicJobsPushRemindersRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -178,6 +187,7 @@ export interface FileRoutesById {
   '/_authenticated/creators/$id': typeof AuthenticatedCreatorsIdRoute
   '/api/public/invitations': typeof ApiPublicInvitationsRoute
   '/_authenticated/creators/': typeof AuthenticatedCreatorsIndexRoute
+  '/api/public/jobs/push-reminders': typeof ApiPublicJobsPushRemindersRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -199,6 +209,7 @@ export interface FileRouteTypes {
     | '/creators/$id'
     | '/api/public/invitations'
     | '/creators/'
+    | '/api/public/jobs/push-reminders'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -218,6 +229,7 @@ export interface FileRouteTypes {
     | '/creators/$id'
     | '/api/public/invitations'
     | '/creators'
+    | '/api/public/jobs/push-reminders'
   id:
     | '__root__'
     | '/'
@@ -238,6 +250,7 @@ export interface FileRouteTypes {
     | '/_authenticated/creators/$id'
     | '/api/public/invitations'
     | '/_authenticated/creators/'
+    | '/api/public/jobs/push-reminders'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -250,6 +263,7 @@ export interface RootRouteChildren {
   AuthCallbackRoute: typeof AuthCallbackRoute
   DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
   ApiPublicInvitationsRoute: typeof ApiPublicInvitationsRoute
+  ApiPublicJobsPushRemindersRoute: typeof ApiPublicJobsPushRemindersRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -380,6 +394,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicInvitationsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/jobs/push-reminders': {
+      id: '/api/public/jobs/push-reminders'
+      path: '/api/public/jobs/push-reminders'
+      fullPath: '/api/public/jobs/push-reminders'
+      preLoaderRoute: typeof ApiPublicJobsPushRemindersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -421,6 +442,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthCallbackRoute: AuthCallbackRoute,
   DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
   ApiPublicInvitationsRoute: ApiPublicInvitationsRoute,
+  ApiPublicJobsPushRemindersRoute: ApiPublicJobsPushRemindersRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
