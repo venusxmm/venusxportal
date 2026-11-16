@@ -288,6 +288,13 @@
       "when": 1794706048170,
       "tag": "0040_creator_portal_notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1794868356465,
+      "tag": "0041_web_push_reminders",
+      "breakpoints": true
     }
   ]
 }
