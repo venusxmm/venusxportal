@@ -295,6 +295,13 @@
       "when": 1794868356465,
       "tag": "0041_web_push_reminders",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1794868384638,
+      "tag": "0042_fix_push_candidates",
+      "breakpoints": true
     }
   ]
 }
