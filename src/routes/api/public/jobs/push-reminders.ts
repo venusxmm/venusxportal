@@ -23,7 +23,7 @@ export const Route = createFileRoute("/api/public/jobs/push-reminders")({
             (x) => x.at.getTime() <= now,
           );
           if (!due.length) continue;
-          const latest = due[due.length - 1];
+          const latest = due[due.length - 1]!;
           const keyFor = (n: number) => `push:${r.user_id}:${r.execution_id}:${deadline.toISOString()}:${n}`;
           // Earlier reminders that were missed are recorded silently so they never fire late.
           const silent = due.slice(0, -1).map((x) => ({
